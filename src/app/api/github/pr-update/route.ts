@@ -24,6 +24,13 @@ export async function POST(req: Request) {
     });
     const latestCommitSha = refData.object.sha;
 
+    // 1b. Get the tree SHA from the latest commit
+    const { data: commitInfo } = await octokit.rest.git.getCommit({
+      owner, repo,
+      commit_sha: latestCommitSha,
+    });
+    const baseTreeSha = commitInfo.tree.sha;
+
     // 2. Create blobs for each modified file
     const treeItems = [];
     for (const mod of modifications) {
@@ -40,10 +47,10 @@ export async function POST(req: Request) {
       });
     }
 
-    // 3. Create a new tree based on the latest commit
+    // 3. Create a new tree based on the latest commit's tree
     const { data: treeData } = await octokit.rest.git.createTree({
       owner, repo,
-      base_tree: latestCommitSha,
+      base_tree: baseTreeSha,
       tree: treeItems,
     });
 
