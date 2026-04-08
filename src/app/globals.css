@@ -44,7 +44,8 @@ html, body {
   min-height: 100vh;
   padding: 2rem;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .page-workspace {
@@ -62,8 +63,8 @@ html, body {
   .page-workspace { flex-direction: column; }
 }
 
-.sidebar { flex: 0 0 380px; display: flex; flex-direction: column; gap: 1.5rem; }
-.main-area { flex: 1; display: flex; flex-direction: column; gap: 1.5rem; }
+.sidebar { flex: 0 0 380px; display: flex; flex-direction: column; gap: 1.5rem; position: sticky; top: 1.5rem; align-self: flex-start; max-height: calc(100vh - 3rem); overflow-y: auto; }
+.main-area { flex: 1; display: flex; flex-direction: column; gap: 1.5rem; min-width: 0; }
 
 @media (max-width: 1024px) {
   .sidebar { flex: none; }
