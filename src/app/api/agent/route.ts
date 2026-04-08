@@ -45,7 +45,20 @@ export async function POST(req: Request) {
         }
       } catch (error: any) {
         console.error("Agent error:", error);
-        sendEvent(controller, "error", { message: error.message });
+        // Extract a clean error message instead of dumping raw JSON
+        let friendlyMessage = "An unexpected error occurred.";
+        if (error?.status === 429 || error?.error?.code === 429 || error?.message?.includes("429")) {
+          friendlyMessage = `Rate limit exceeded for ${modelId}. Your API quota has been exhausted. Please wait or switch to a different model.`;
+        } else if (error?.message) {
+          // Try to extract just the readable part
+          try {
+            const parsed = JSON.parse(error.message);
+            friendlyMessage = parsed?.error?.message?.split(".")[0] || error.message;
+          } catch {
+            friendlyMessage = error.message.length > 200 ? error.message.slice(0, 200) + "..." : error.message;
+          }
+        }
+        sendEvent(controller, "error", { message: friendlyMessage });
       } finally {
         controller.close();
       }

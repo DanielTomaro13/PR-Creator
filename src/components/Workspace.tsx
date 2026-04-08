@@ -148,8 +148,9 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
         }
       }
     } catch (err: any) {
-      setError(err.message);
-      addLog("error", err.message);
+      const msg = err.message?.length > 200 ? err.message.slice(0, 200) + "..." : err.message;
+      setError(msg);
+      addLog("error", msg);
     } finally {
       setIsAgentRunning(false);
     }
