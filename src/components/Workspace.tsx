@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Play, Check, X, GitPullRequest, Code2, AlertCircle, Activity } from "lucide-react";
+import { Loader2, Play, Check, X, GitPullRequest, Code2, AlertCircle, Activity, Cpu } from "lucide-react";
 import * as Diff from "diff";
 import * as Diff2Html from "diff2html";
 import "diff2html/bundles/css/diff2html.min.css";
@@ -30,6 +30,7 @@ export interface AgentUsage {
 }
 
 export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; onReset: () => void }) {
+  const [modelId, setModelId] = useState("claude-opus-4-6");
   const [prompt, setPrompt] = useState("");
   const [isAgentRunning, setIsAgentRunning] = useState(false);
   const [agentStep, setAgentStep] = useState("");
@@ -59,6 +60,7 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
           defaultBranch: repoContext.defaultBranch,
           files: repoContext.files,
           prompt,
+          modelId,
         }),
       });
 
@@ -204,7 +206,23 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
       <div className="w-full lg:w-2/3 flex flex-col gap-6">
         <div className="glass-panel p-6">
           <form onSubmit={handleRunAgent} className="flex flex-col gap-4">
-            <label className="text-lg font-bold">What would you like to build or fix?</label>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
+              <label className="text-lg font-bold">What would you like to build or fix?</label>
+              
+              <div className="flex items-center gap-2 bg-surface/50 border border-surface-border px-3 py-2 rounded-xl">
+                <Cpu className="w-4 h-4 text-primary shrink-0" />
+                <select 
+                  value={modelId} 
+                  onChange={(e) => setModelId(e.target.value)}
+                  className="bg-transparent border-none text-sm outline-none text-foreground w-full font-medium"
+                >
+                  <option value="claude-opus-4-6">Claude Opus 4.6 (Premium)</option>
+                  <option value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet (Fast)</option>
+                  <option value="gemini-2.5-pro">Gemini 2.5 Pro (Free)</option>
+                </select>
+              </div>
+            </div>
+            
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}

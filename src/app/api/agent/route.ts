@@ -13,6 +13,7 @@ type ContextParam = {
   defaultBranch: string;
   files: string[];
   prompt: string;
+  modelId: string;
 }
 
 export async function POST(req: Request) {
@@ -25,13 +26,15 @@ export async function POST(req: Request) {
     const context = await req.json();
     const octokit = new Octokit({ auth: session.accessToken });
 
-    const provider = process.env.AI_PROVIDER?.toLowerCase() || "anthropic";
+    const modelId = context.modelId || "";
 
     let result;
-    if (provider === "gemini") {
+    if (modelId.includes("gemini")) {
       result = await runGeminiAgent(context, octokit);
-    } else {
+    } else if (modelId.includes("claude")) {
       result = await runAnthropicAgent(context, octokit);
+    } else {
+      throw new Error(`Unsupported model ID: ${modelId}`);
     }
 
     return NextResponse.json(result);
@@ -46,10 +49,10 @@ export async function POST(req: Request) {
 // ----------------------------------------------------------------------
 async function runAnthropicAgent(context: ContextParam, octokit: Octokit) {
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
-  if (!anthropicApiKey) throw new Error("ANTHROPIC_API_KEY is missing");
+  if (!anthropicApiKey) throw new Error("ANTHROPIC_API_KEY is missing from environment. Please add it to .env.local.");
 
   const anthropic = new Anthropic({ apiKey: anthropicApiKey });
-  const { owner, repo, defaultBranch, files, prompt } = context;
+  const { owner, repo, defaultBranch, files, prompt, modelId } = context;
 
   const readGithubFile = {
     name: "read_github_file",
@@ -99,7 +102,7 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
 
   for (let i = 0; i < 6; i++) {
     const completion = await anthropic.messages.create({
-      model: "claude-opus-4-6", // Using highest available model as requested
+      model: modelId,
       max_tokens: 8000,
       system: systemPrompt,
       messages,
@@ -160,10 +163,15 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
   const modificationsList = JSON.parse(jsonMatch[0]);
   const modifications = await constructModifications(owner, repo, defaultBranch, modificationsList, octokit);
 
-  // Claude Opus pricing logic: $15.00 / M in, $75.00 / M out
-  const estimatedCostUsd = (totalInputTokens / 1_000_000) * 15.00 + (totalOutputTokens / 1_000_000) * 75.00;
+  let estimatedCostUsd = 0;
+  if (modelId.includes('opus')) {
+    estimatedCostUsd = (totalInputTokens / 1_000_000) * 15.00 + (totalOutputTokens / 1_000_000) * 75.00;
+  } else {
+    // Sonnet default
+    estimatedCostUsd = (totalInputTokens / 1_000_000) * 3.00 + (totalOutputTokens / 1_000_000) * 15.00;
+  }
 
-  return { modifications, usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, estimatedCostUsd, provider: 'anthropic-opus' } };
+  return { modifications, usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, estimatedCostUsd, provider: modelId } };
 }
 
 // ----------------------------------------------------------------------
@@ -171,10 +179,10 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
 // ----------------------------------------------------------------------
 async function runGeminiAgent(context: ContextParam, octokit: Octokit) {
   const geminiApiKey = process.env.GEMINI_API_KEY;
-  if (!geminiApiKey) throw new Error("GEMINI_API_KEY is missing");
+  if (!geminiApiKey) throw new Error("GEMINI_API_KEY is missing from environment. Please add it to .env.local via Google AI Studio.");
 
   const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-  const { owner, repo, defaultBranch, files, prompt } = context;
+  const { owner, repo, defaultBranch, files, prompt, modelId } = context;
 
   const systemPrompt = `You are PR-Creator, an autonomous senior software engineer.
 You are working on the repository: ${owner}/${repo} (Branch: ${defaultBranch}).
@@ -222,7 +230,7 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
 
   for (let i = 0; i < 6; i++) {
      const response = await ai.models.generateContent({
-         model: 'gemini-2.5-pro',
+         model: modelId,
          contents,
          config: {
              systemInstruction: systemPrompt,
