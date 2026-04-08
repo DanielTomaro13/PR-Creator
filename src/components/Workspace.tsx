@@ -90,9 +90,10 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
-  // Auto-explain repo on mount
-  useEffect(() => {
+  // Manual repo explanation
+  const handleExplainRepo = () => {
     setIsExplaining(true);
+    setRepoExplanation("");
     fetch("/api/github/explain", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -109,7 +110,7 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
       .then(data => setRepoExplanation(data.explanation || ""))
       .catch(() => {})
       .finally(() => setIsExplaining(false));
-  }, [repoContext.owner, repoContext.repo]);
+  };
 
   const addLog = (type: LogEntry["type"], message: string) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -390,7 +391,23 @@ ${filesChanged}
 
         {/* Repo Explanation */}
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
-          <h3 className="section-title" style={{ marginBottom: '0.5rem' }}>Repo Overview</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <h3 className="section-title" style={{ marginBottom: 0 }}>Repo Overview</h3>
+            <button
+              onClick={handleExplainRepo}
+              disabled={isExplaining}
+              className="btn-primary"
+              style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem', gap: '0.35rem' }}
+            >
+              {isExplaining ? (
+                <div className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} />
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+              )}
+              Explain
+            </button>
+          </div>
+          <p style={{ fontSize: '0.7rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>Uses: {modelId}</p>
           {isExplaining ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--muted)', fontSize: '0.85rem' }}>
               <div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5 }} />
@@ -399,7 +416,7 @@ ${filesChanged}
           ) : repoExplanation ? (
             <div style={{ fontSize: '0.82rem', color: 'var(--muted)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{repoExplanation}</div>
           ) : (
-            <p style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>No explanation available.</p>
+            <p style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>Click "Explain" to analyze this repository.</p>
           )}
         </div>
 

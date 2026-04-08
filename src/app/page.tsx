@@ -219,6 +219,35 @@ export default function Home() {
               {error && <div className="error-text" style={{ marginTop: '0.75rem' }}>{error}</div>}
             </form>
 
+            {/* Cumulative Usage Stats */}
+            {(() => {
+              const totalInput = savedSessions.reduce((sum, s) => sum + (s.usage?.inputTokens || 0), 0);
+              const totalOutput = savedSessions.reduce((sum, s) => sum + (s.usage?.outputTokens || 0), 0);
+              const totalCost = savedSessions.reduce((sum, s) => sum + (s.usage?.estimatedCostUsd || 0), 0);
+              return (
+                <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
+                    Usage
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--primary)' }}>{totalInput.toLocaleString()}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>Input Tokens</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--accent)' }}>{totalOutput.toLocaleString()}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>Output Tokens</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--success)' }}>${totalCost.toFixed(2)}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>Total Cost</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Session History */}
             <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
