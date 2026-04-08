@@ -97,7 +97,7 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
             const { data } = await octokit.rest.repos.getContent({
               owner,
               repo,
-              path: toolCall.input.path as string,
+              path: (toolCall.input as { path: string }).path,
               ref: defaultBranch
             });
             let content = "";
