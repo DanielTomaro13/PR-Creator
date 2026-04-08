@@ -99,7 +99,7 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
 
   for (let i = 0; i < 6; i++) {
     const completion = await anthropic.messages.create({
-      model: "claude-3-7-sonnet-20250219",
+      model: "claude-opus-4-6", // Using highest available model as requested
       max_tokens: 8000,
       system: systemPrompt,
       messages,
@@ -160,10 +160,10 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
   const modificationsList = JSON.parse(jsonMatch[0]);
   const modifications = await constructModifications(owner, repo, defaultBranch, modificationsList, octokit);
 
-  // Claude 3.7 Sonnet pricing as of Mar 2025: $3.00 / M in, $15.00 / M out
-  const estimatedCostUsd = (totalInputTokens / 1_000_000) * 3.00 + (totalOutputTokens / 1_000_000) * 15.00;
+  // Claude Opus pricing logic: $15.00 / M in, $75.00 / M out
+  const estimatedCostUsd = (totalInputTokens / 1_000_000) * 15.00 + (totalOutputTokens / 1_000_000) * 75.00;
 
-  return { modifications, usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, estimatedCostUsd, provider: 'anthropic' } };
+  return { modifications, usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, estimatedCostUsd, provider: 'anthropic-opus' } };
 }
 
 // ----------------------------------------------------------------------
