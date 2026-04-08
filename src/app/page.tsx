@@ -220,16 +220,20 @@ export default function Home() {
             </form>
 
             {/* Session History */}
-            {savedSessions.length > 0 && (
-              <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <h3 style={{ fontSize: '0.95rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <ClockIcon /> Recent Sessions
-                  </h3>
+            <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <ClockIcon /> Recent Sessions
+                </h3>
+                {savedSessions.length > 0 && (
                   <button onClick={clearSessions} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
                     <TrashIcon /> Clear
                   </button>
-                </div>
+                )}
+              </div>
+              {savedSessions.length === 0 ? (
+                <p style={{ fontSize: '0.82rem', color: 'var(--muted)', textAlign: 'center', padding: '0.5rem 0' }}>No sessions yet. Load a repo and run the AI engineer to get started.</p>
+              ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {savedSessions.slice(0, 5).map((s) => (
                     <div key={s.id} className="session-card">
@@ -247,20 +251,22 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* PR History */}
-            {loadingPRs ? (
-              <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem', textAlign: 'center' }}>
-                <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2, margin: '0 auto' }} />
-                <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.5rem' }}>Loading PR history...</p>
-              </div>
-            ) : prHistory.length > 0 && (
-              <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
-                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <GithubIcon className="" /> Your PRs
-                </h3>
+            <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <GithubIcon className="" /> Your PRs
+              </h3>
+              {loadingPRs ? (
+                <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
+                  <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2, margin: '0 auto' }} />
+                  <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.5rem' }}>Loading PR history...</p>
+                </div>
+              ) : prHistory.length === 0 ? (
+                <p style={{ fontSize: '0.82rem', color: 'var(--muted)', textAlign: 'center', padding: '0.5rem 0' }}>No PRs created yet. Submit a PR and it will appear here.</p>
+              ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {prHistory.map((pr) => (
                     <a key={pr.id} href={pr.url} target="_blank" rel="noreferrer" className="pr-history-card">
@@ -275,8 +281,8 @@ export default function Home() {
                     </a>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
       </div>
