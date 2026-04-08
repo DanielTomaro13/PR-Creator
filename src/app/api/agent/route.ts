@@ -127,23 +127,36 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
 
-  for (let i = 0; i < 6; i++) {
-    sendEvent(controller, "status", { message: `Thinking... (iteration ${i + 1}/6)`, step: "thinking" });
+  const MAX_ITERATIONS = 10;
+
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const isLastIteration = i === MAX_ITERATIONS - 1;
+    sendEvent(controller, "status", { message: `Thinking... (iteration ${i + 1}/${MAX_ITERATIONS})`, step: "thinking" });
 
     const completion = await anthropic.messages.create({
       model: modelId,
       max_tokens: 16000,
       system: systemPrompt,
       messages,
-      tools: [readGithubFile as any],
+      // Drop tools on last iteration to force the agent to produce output
+      tools: isLastIteration ? undefined : [readGithubFile as any],
     });
 
     totalInputTokens += completion.usage.input_tokens;
     totalOutputTokens += completion.usage.output_tokens;
 
+    // Calculate live cost
+    let liveCost = 0;
+    if (modelId.includes('opus')) {
+      liveCost = (totalInputTokens / 1_000_000) * 15.00 + (totalOutputTokens / 1_000_000) * 75.00;
+    } else {
+      liveCost = (totalInputTokens / 1_000_000) * 3.00 + (totalOutputTokens / 1_000_000) * 15.00;
+    }
+
     sendEvent(controller, "usage", {
       inputTokens: totalInputTokens,
       outputTokens: totalOutputTokens,
+      estimatedCostUsd: liveCost,
       provider: modelId,
     });
 
@@ -236,15 +249,18 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
 
-  for (let i = 0; i < 6; i++) {
-    sendEvent(controller, "status", { message: `Thinking... (iteration ${i + 1}/6)`, step: "thinking" });
+  const MAX_ITERATIONS = 10;
+
+  for (let i = 0; i < MAX_ITERATIONS; i++) {
+    const isLastIteration = i === MAX_ITERATIONS - 1;
+    sendEvent(controller, "status", { message: `Thinking... (iteration ${i + 1}/${MAX_ITERATIONS})`, step: "thinking" });
 
     const response = await ai.models.generateContent({
       model: modelId,
       contents,
       config: {
         systemInstruction: systemPrompt,
-        tools: [{ functionDeclarations: [readGithubFileDecl as any] }],
+        tools: isLastIteration ? undefined : [{ functionDeclarations: [readGithubFileDecl as any] }],
       }
     });
 
@@ -256,6 +272,7 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
     sendEvent(controller, "usage", {
       inputTokens: totalInputTokens,
       outputTokens: totalOutputTokens,
+      estimatedCostUsd: 0,
       provider: modelId,
     });
 

@@ -174,7 +174,7 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
         setUsage({
           inputTokens: data.inputTokens,
           outputTokens: data.outputTokens,
-          estimatedCostUsd: 0,
+          estimatedCostUsd: data.estimatedCostUsd ?? 0,
           provider: data.provider,
         });
         break;
