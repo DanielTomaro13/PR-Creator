@@ -48,7 +48,7 @@ export async function POST(req: Request) {
         const result = await octokit.rest.repos.createOrUpdateFileContents({
           owner, repo,
           path: mod.path,
-          message: message || `PR-Creator: update ${mod.path}`,
+          message: message || `update ${mod.path}`,
           content: Buffer.from(mod.content, "utf-8").toString("base64"),
           branch,
           ...(fileSha ? { sha: fileSha } : {}),
