@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Play, Check, X, GitPullRequest, Code2, AlertCircle, Activity, Cpu } from "lucide-react";
 import * as Diff from "diff";
 import * as Diff2Html from "diff2html";
 import "diff2html/bundles/css/diff2html.min.css";
@@ -29,6 +28,32 @@ export interface AgentUsage {
   provider: string;
 }
 
+/* ── Inline SVG Icons ── */
+const PlayIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="6 3 20 12 6 21 6 3" /></svg>
+);
+const CheckIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+);
+const XIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+);
+const GitPRIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" /><path d="M13 6h3a2 2 0 0 1 2 2v7" /><line x1="6" y1="9" x2="6" y2="21" /></svg>
+);
+const CodeIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg>
+);
+const AlertIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+);
+const ActivityIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
+);
+const CpuIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2" /></svg>
+);
+
 export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; onReset: () => void }) {
   const [modelId, setModelId] = useState("claude-opus-4-6");
   const [prompt, setPrompt] = useState("");
@@ -47,10 +72,9 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
     setModifications(null);
     setUsage(null);
     setError("");
-    setAgentStep("Initializing agent...");
+    setAgentStep("Analyzing codebase & drafting changes...");
 
     try {
-      setAgentStep("Analyzing codebase & drafting changes...");
       const res = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -109,192 +133,162 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
 
   const renderDiff = (mod: { path: string; originalContent: string; content: string }) => {
     const patch = Diff.createTwoFilesPatch(
-      mod.path,
-      mod.path,
-      mod.originalContent || "",
-      mod.content || "",
-      "Original",
-      "Modified"
+      mod.path, mod.path,
+      mod.originalContent || "", mod.content || "",
+      "Original", "Modified"
     );
-
     const html = Diff2Html.html(patch, {
       drawFileList: false,
       matching: "lines",
       outputFormat: "line-by-line",
       colorScheme: "dark" as any,
     });
-
     return <div dangerouslySetInnerHTML={{ __html: html }} className="diff-wrapper" />;
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto flex flex-col lg:flex-row gap-6 animate-fade-in p-6 z-10">
-      {/* Sidebar - Issues & Context */}
-      <div className="w-full lg:w-1/3 flex flex-col gap-6">
-        <div className="glass-panel p-6 flex flex-col">
-          <div className="flex justify-between items-start mb-4">
+    <div className="page-workspace animate-fade-in">
+      {/* ── Sidebar ── */}
+      <div className="sidebar">
+        {/* Repo info */}
+        <div className="glass-panel" style={{ padding: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
             <div>
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Code2 className="w-5 h-5 text-primary" />
+              <h2 className="section-title" style={{ marginBottom: '0.25rem' }}>
+                <CodeIcon />
                 {repoContext.owner}/{repoContext.repo}
               </h2>
-              <p className="text-sm text-muted mt-1">{repoContext.description || "No description"}</p>
+              <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>{repoContext.description || "No description"}</p>
             </div>
-            <button onClick={onReset} className="text-muted hover:text-foreground">
-              <X className="w-5 h-5" />
+            <button onClick={onReset} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '4px' }}>
+              <XIcon />
             </button>
           </div>
-          <div className="flex gap-2 mb-4">
-            <span className="bg-surface border border-surface-border px-2 py-1 rounded text-xs font-mono">
-              Branch: {repoContext.defaultBranch}
-            </span>
-            <span className="bg-surface border border-surface-border px-2 py-1 rounded text-xs font-mono">
-              {repoContext.files.length} files
-            </span>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <span className="badge">{repoContext.defaultBranch}</span>
+            <span className="badge">{repoContext.files.length} files</span>
           </div>
         </div>
 
-        <div className="glass-panel p-6 flex-1 max-h-[500px] overflow-y-auto">
-          <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-accent" />
+        {/* Issues */}
+        <div className="glass-panel" style={{ padding: '1.25rem', flex: 1, maxHeight: '500px', overflowY: 'auto' }}>
+          <h3 className="section-title">
+            <AlertIcon />
             Open Issues ({repoContext.issues.length})
           </h3>
           {repoContext.issues.length === 0 ? (
-            <p className="text-muted text-sm">No open issues found.</p>
+            <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>No open issues found.</p>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {repoContext.issues.map((issue) => (
-                <div 
-                  key={issue.number} 
-                  className="p-3 bg-surface border border-surface-border rounded-lg hover:border-primary/50 cursor-pointer transition-colors"
+                <div
+                  key={issue.number}
+                  className="issue-card"
                   onClick={() => setPrompt(`Fix Issue #${issue.number}: ${issue.title}\n\n${issue.body || ""}`)}
                 >
-                  <div className="font-medium text-sm text-primary mb-1">#{issue.number}</div>
-                  <div className="text-sm line-clamp-2">{issue.title}</div>
+                  <div className="issue-number">#{issue.number}</div>
+                  <div className="issue-title">{issue.title}</div>
                 </div>
               ))}
             </div>
           )}
         </div>
 
+        {/* Usage widget */}
         {usage && (
-          <div className="glass-panel p-6 flex flex-col animate-fade-in mt-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-primary">
-              <Activity className="w-5 h-5 text-primary" />
-              Run Metrics <span className="bg-primary/20 text-primary text-xs px-2 py-0.5 rounded ml-2 font-mono uppercase">{usage.provider}</span>
+          <div className="glass-panel usage-widget animate-fade-in">
+            <h3 className="section-title">
+              <ActivityIcon />
+              Run Metrics
+              <span className="usage-provider-tag">{usage.provider}</span>
             </h3>
-            <div className="flex flex-col gap-2 font-mono text-sm max-w-sm">
-              <div className="flex justify-between">
-                <span className="text-muted">Input Tokens:</span>
-                <span>{usage.inputTokens.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted">Output Tokens:</span>
-                <span>{usage.outputTokens.toLocaleString()}</span>
-              </div>
-              <div className="h-px bg-surface-border my-2"></div>
-              <div className="flex justify-between font-bold text-success text-base">
-                <span>Est. Cost:</span>
-                <span>${usage.estimatedCostUsd.toFixed(4)}</span>
-              </div>
-            </div>
+            <div className="usage-row"><span className="label">Input Tokens</span><span>{usage.inputTokens.toLocaleString()}</span></div>
+            <div className="usage-row"><span className="label">Output Tokens</span><span>{usage.outputTokens.toLocaleString()}</span></div>
+            <div className="usage-divider" />
+            <div className="usage-total"><span>Est. Cost</span><span>${usage.estimatedCostUsd.toFixed(4)}</span></div>
           </div>
         )}
       </div>
 
-      {/* Main Area - Prompt & Diffs */}
-      <div className="w-full lg:w-2/3 flex flex-col gap-6">
-        <div className="glass-panel p-6">
-          <form onSubmit={handleRunAgent} className="flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
-              <label className="text-lg font-bold">What would you like to build or fix?</label>
-              
-              <div className="flex items-center gap-2 bg-surface/50 border border-surface-border px-3 py-2 rounded-xl">
-                <Cpu className="w-4 h-4 text-primary shrink-0" />
-                <select 
-                  value={modelId} 
-                  onChange={(e) => setModelId(e.target.value)}
-                  className="bg-transparent border-none text-sm outline-none text-foreground w-full font-medium"
-                >
+      {/* ── Main Area ── */}
+      <div className="main-area">
+        {/* Prompt */}
+        <div className="glass-panel" style={{ padding: '1.5rem' }}>
+          <form onSubmit={handleRunAgent} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <label style={{ fontSize: '1.1rem', fontWeight: 700 }}>What would you like to build or fix?</label>
+              <div className="model-selector">
+                <CpuIcon />
+                <select value={modelId} onChange={(e) => setModelId(e.target.value)}>
                   <option value="claude-opus-4-6">Claude Opus 4.6 (Premium)</option>
                   <option value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet (Fast)</option>
                   <option value="gemini-2.5-pro">Gemini 2.5 Pro (Free)</option>
                 </select>
               </div>
             </div>
-            
+
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="e.g., Fix the navigation bar responsiveness, or implement the login page styling."
-              className="input-base min-h-[120px] resize-y"
+              className="prompt-area"
               required
             />
-            <button 
-              type="submit" 
-              disabled={isAgentRunning || !prompt}
-              className="btn-primary self-end"
-            >
-              {isAgentRunning ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  {agentStep}
-                </>
-              ) : (
-                <>
-                  <Play className="w-5 h-5" />
-                  Run AI Engineer
-                </>
-              )}
-            </button>
-            {error && <div className="text-error text-sm mt-2">{error}</div>}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="submit" disabled={isAgentRunning || !prompt} className="btn-primary">
+                {isAgentRunning ? (
+                  <>
+                    <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
+                    {agentStep}
+                  </>
+                ) : (
+                  <>
+                    <PlayIcon />
+                    Run AI Engineer
+                  </>
+                )}
+              </button>
+            </div>
+
+            {error && <div className="error-text">{error}</div>}
           </form>
         </div>
 
+        {/* PR Success */}
         {prUrl && (
-           <div className="glass-panel p-6 border-success bg-success/10 flex flex-col items-center justify-center text-center animate-fade-in">
-             <div className="w-16 h-16 bg-success rounded-full flex items-center justify-center mb-4">
-               <Check className="w-8 h-8 text-black" />
-             </div>
-             <h3 className="text-2xl font-bold mb-2 text-success">Pull Request Submitted!</h3>
-             <a href={prUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline font-mono">
-               {prUrl}
-             </a>
-           </div>
+          <div className="pr-banner animate-fade-in">
+            <div className="pr-banner-icon"><CheckIcon /></div>
+            <h3>Pull Request Submitted!</h3>
+            <a href={prUrl} target="_blank" rel="noreferrer">{prUrl}</a>
+          </div>
         )}
 
+        {/* Diffs */}
         {modifications && !prUrl && (
-          <div className="glass-panel p-6 animate-fade-in flex flex-col gap-6">
-            <div className="flex justify-between items-center bg-surface p-4 rounded-lg border border-surface-border">
+          <div className="glass-panel animate-fade-in" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div className="merge-bar">
               <div>
-                <h3 className="text-xl font-bold">Ready to Merge</h3>
-                <p className="text-muted text-sm">{modifications.length} files modified</p>
+                <h3>Ready to Merge</h3>
+                <p>{modifications.length} file{modifications.length > 1 ? 's' : ''} modified</p>
               </div>
-              <button 
-                onClick={handleSubmitPR} 
-                disabled={isSubmitting}
-                className="btn-primary !bg-success hover:!bg-success/80 text-black"
-              >
+              <button onClick={handleSubmitPR} disabled={isSubmitting} className="btn-success">
                 {isSubmitting ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2, borderTopColor: 'var(--background)' }} />
                 ) : (
                   <>
-                    <GitPullRequest className="w-5 h-5" />
+                    <GitPRIcon />
                     Submit Pull Request
                   </>
                 )}
               </button>
             </div>
 
-            <div className="flex flex-col gap-6">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               {modifications.map((mod, idx) => (
-                <div key={idx} className="border border-surface-border rounded-lg overflow-hidden bg-background">
-                  <div className="bg-surface px-4 py-2 border-b border-surface-border font-mono text-sm text-muted">
-                    {mod.path}
-                  </div>
-                  <div className="p-4 overflow-x-auto text-sm">
-                    {renderDiff(mod)}
-                  </div>
+                <div key={idx} className="glass-panel" style={{ overflow: 'hidden', padding: 0 }}>
+                  <div className="diff-file-header">{mod.path}</div>
+                  <div style={{ padding: '0.75rem', overflowX: 'auto' }}>{renderDiff(mod)}</div>
                 </div>
               ))}
             </div>
