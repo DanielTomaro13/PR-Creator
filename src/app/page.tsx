@@ -313,10 +313,36 @@ export default function Home() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {savedSessions.slice(0, 5).map((s) => (
-                    <div key={s.id} className="session-card">
+                    <div
+                      key={s.id}
+                      className="session-card"
+                      style={{ cursor: 'pointer' }}
+                      onClick={async () => {
+                        setError("");
+                        setIsIngesting(true);
+                        try {
+                          const repoUrl = `https://github.com/${s.repo}`;
+                          const res = await fetch("/api/github/scan", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ repoUrl }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) throw new Error(data.error || "Failed to load repo");
+                          setRepoContext(data);
+                        } catch (err: any) {
+                          setError(err.message);
+                        } finally {
+                          setIsIngesting(false);
+                        }
+                      }}
+                    >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{s.repo}</span>
-                        {getSessionStatusBadge(s.status)}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          {getSessionStatusBadge(s.status)}
+                          <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>→ load</span>
+                        </div>
                       </div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '2px' }}>
                         {s.prompt?.slice(0, 80)}{s.prompt?.length > 80 ? '...' : ''}
@@ -331,30 +357,29 @@ export default function Home() {
               )}
             </div>
 
-            {/* PR History — grouped by repo */}
+            {/* Open PRs — grouped by repo */}
             <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <GithubIcon className="" /> Your PRs
+                <GithubIcon className="" /> Open PRs
               </h3>
               {loadingPRs ? (
                 <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
                   <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2, margin: '0 auto' }} />
                   <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.5rem' }}>Loading PR history...</p>
                 </div>
-              ) : prHistory.length === 0 ? (
-                <p style={{ fontSize: '0.82rem', color: 'var(--muted)', textAlign: 'center', padding: '0.5rem 0' }}>No PRs created yet. Submit a PR and it will appear here.</p>
+              ) : prHistory.filter(p => p.state === 'open').length === 0 ? (
+                <p style={{ fontSize: '0.82rem', color: 'var(--muted)', textAlign: 'center', padding: '0.5rem 0' }}>No open PRs. All clear!</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {(() => {
+                    const openPRs = prHistory.filter(p => p.state === 'open');
                     const grouped: Record<string, PREntry[]> = {};
-                    prHistory.forEach(pr => {
+                    openPRs.forEach(pr => {
                       if (!grouped[pr.repo]) grouped[pr.repo] = [];
                       grouped[pr.repo].push(pr);
                     });
                     return Object.entries(grouped).map(([repoName, prs]) => {
                       const isExpanded = expandedRepos.has(repoName);
-                      const openCount = prs.filter(p => p.state === 'open').length;
-                      const mergedCount = prs.filter(p => p.state === 'merged').length;
                       return (
                         <div key={repoName}>
                           <button
@@ -371,53 +396,31 @@ export default function Home() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }}><polyline points="9 18 15 12 9 6" /></svg>
                               <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{repoName}</span>
-                              <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>({prs.length})</span>
-                            </div>
-                            <div style={{ display: 'flex', gap: '0.4rem' }}>
-                              {openCount > 0 && <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '999px', background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}>{openCount} open</span>}
-                              {mergedCount > 0 && <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '999px', background: 'rgba(139,92,246,0.15)', color: '#a78bfa' }}>{mergedCount} merged</span>}
+                              <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>({prs.length} open)</span>
                             </div>
                           </button>
-                          {isExpanded && (() => {
-                            const statusOrder = ['open', 'merged', 'closed'] as const;
-                            const statusColors: Record<string, string> = { open: '#60a5fa', merged: '#a78bfa', closed: '#9ca3af' };
-                            const byStatus: Record<string, PREntry[]> = {};
-                            prs.forEach(pr => {
-                              if (!byStatus[pr.state]) byStatus[pr.state] = [];
-                              byStatus[pr.state].push(pr);
-                            });
-                            return (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.35rem', paddingLeft: '1.25rem' }}>
-                                {statusOrder.filter(s => byStatus[s]?.length).map(status => (
-                                  <div key={status}>
-                                    <div className="status-group-label" style={{ color: statusColors[status] }}>
-                                      {status} ({byStatus[status].length})
-                                    </div>
-                                    {byStatus[status].map(pr => (
-                                      <div
-                                        key={pr.id}
-                                        onClick={() => handleOpenPR(pr)}
-                                        className="pr-history-card"
-                                        style={{ padding: '0.5rem 0.75rem', marginBottom: '0.25rem', display: 'block', cursor: 'pointer' }}
-                                      >
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                          <span style={{ fontWeight: 500, fontSize: '0.8rem' }}>#{pr.number} {pr.title}</span>
-                                          {loadingPR === pr.url ? (
-                                            <div className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} />
-                                          ) : pr.state === 'open' ? (
-                                            <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>→ workspace</span>
-                                          ) : (
-                                            <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>↗ github</span>
-                                          )}
-                                        </div>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>{new Date(pr.createdAt).toLocaleDateString()}</div>
-                                      </div>
-                                    ))}
+                          {isExpanded && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginTop: '0.35rem', paddingLeft: '1.25rem' }}>
+                              {prs.map(pr => (
+                                <div
+                                  key={pr.id}
+                                  onClick={() => handleOpenPR(pr)}
+                                  className="pr-history-card"
+                                  style={{ padding: '0.5rem 0.75rem', cursor: 'pointer' }}
+                                >
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontWeight: 500, fontSize: '0.8rem' }}>#{pr.number} {pr.title}</span>
+                                    {loadingPR === pr.url ? (
+                                      <div className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} />
+                                    ) : (
+                                      <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>→ workspace</span>
+                                    )}
                                   </div>
-                                ))}
-                              </div>
-                            );
-                          })()}
+                                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>{new Date(pr.createdAt).toLocaleDateString()}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     });
