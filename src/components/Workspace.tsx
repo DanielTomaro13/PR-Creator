@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Play, Check, X, GitPullRequest, Code2, AlertCircle } from "lucide-react";
+import { Loader2, Play, Check, X, GitPullRequest, Code2, AlertCircle, Activity } from "lucide-react";
 import * as Diff from "diff";
 import * as Diff2Html from "diff2html";
 import "diff2html/bundles/css/diff2html.min.css";
@@ -22,11 +22,19 @@ export interface RepoContext {
   issues: Issue[];
 }
 
+export interface AgentUsage {
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCostUsd: number;
+  provider: string;
+}
+
 export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; onReset: () => void }) {
   const [prompt, setPrompt] = useState("");
   const [isAgentRunning, setIsAgentRunning] = useState(false);
   const [agentStep, setAgentStep] = useState("");
   const [modifications, setModifications] = useState<{ path: string; originalContent: string; content: string }[] | null>(null);
+  const [usage, setUsage] = useState<AgentUsage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [prUrl, setPrUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -36,6 +44,7 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
     if (!prompt) return;
     setIsAgentRunning(true);
     setModifications(null);
+    setUsage(null);
     setError("");
     setAgentStep("Initializing agent...");
 
@@ -57,6 +66,7 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
       if (!res.ok) throw new Error(data.error || "Agent failed");
 
       setModifications(data.modifications);
+      setUsage(data.usage);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -164,6 +174,30 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
             </div>
           )}
         </div>
+
+        {usage && (
+          <div className="glass-panel p-6 flex flex-col animate-fade-in mt-6">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-primary">
+              <Activity className="w-5 h-5 text-primary" />
+              Run Metrics <span className="bg-primary/20 text-primary text-xs px-2 py-0.5 rounded ml-2 font-mono uppercase">{usage.provider}</span>
+            </h3>
+            <div className="flex flex-col gap-2 font-mono text-sm max-w-sm">
+              <div className="flex justify-between">
+                <span className="text-muted">Input Tokens:</span>
+                <span>{usage.inputTokens.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">Output Tokens:</span>
+                <span>{usage.outputTokens.toLocaleString()}</span>
+              </div>
+              <div className="h-px bg-surface-border my-2"></div>
+              <div className="flex justify-between font-bold text-success text-base">
+                <span>Est. Cost:</span>
+                <span>${usage.estimatedCostUsd.toFixed(4)}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Area - Prompt & Diffs */}
