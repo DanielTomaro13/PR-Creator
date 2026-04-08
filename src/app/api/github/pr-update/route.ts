@@ -4,74 +4,62 @@ import { authOptions } from "../../auth/[...nextauth]/route";
 import { Octokit } from "octokit";
 
 export async function POST(req: Request) {
+  let owner = "?", repo = "?";
   try {
     const session = await getServerSession(authOptions);
     if (!session || !session.accessToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { owner, repo, branch, modifications, message } = await req.json();
+    const body = await req.json();
+    owner = body.owner;
+    repo = body.repo;
+    const { branch, modifications, message } = body;
+    console.log(`[pr-update] owner=${owner} repo=${repo} branch=${branch} files=${modifications?.length}`);
+
     if (!branch || !modifications?.length) {
       return NextResponse.json({ error: "branch and modifications are required" }, { status: 400 });
     }
 
     const octokit = new Octokit({ auth: session.accessToken });
 
-    // 1. Get the latest commit on the PR branch
-    const { data: refData } = await octokit.rest.git.getRef({
-      owner, repo,
-      ref: `heads/${branch}`,
-    });
-    const latestCommitSha = refData.object.sha;
-
-    // 1b. Get the tree SHA from the latest commit
-    const { data: commitInfo } = await octokit.rest.git.getCommit({
-      owner, repo,
-      commit_sha: latestCommitSha,
-    });
-    const baseTreeSha = commitInfo.tree.sha;
-
-    // 2. Create blobs for each modified file
-    const treeItems = [];
+    // Use the Contents API (PUT) to update files one at a time.
+    // This works reliably with forks, unlike the low-level Git Trees API.
+    let lastCommitSha = "";
     for (const mod of modifications) {
-      const { data: blobData } = await octokit.rest.git.createBlob({
+      console.log(`[pr-update] Updating file: ${mod.path} on ${owner}/${repo}@${branch}`);
+
+      // Get the current file SHA (needed for updates)
+      let fileSha: string | undefined;
+      try {
+        const { data: existing } = await octokit.rest.repos.getContent({
+          owner, repo, path: mod.path, ref: branch,
+        });
+        if (!Array.isArray(existing) && existing.sha) {
+          fileSha = existing.sha;
+        }
+      } catch {
+        // File doesn't exist yet — will be created
+      }
+
+      const result = await octokit.rest.repos.createOrUpdateFileContents({
         owner, repo,
-        content: Buffer.from(mod.content, "utf-8").toString("base64"),
-        encoding: "base64",
-      });
-      treeItems.push({
         path: mod.path,
-        mode: "100644" as const,
-        type: "blob" as const,
-        sha: blobData.sha,
+        message: message || `PR-Creator: update ${mod.path}`,
+        content: Buffer.from(mod.content, "utf-8").toString("base64"),
+        branch,
+        ...(fileSha ? { sha: fileSha } : {}),
       });
+
+      lastCommitSha = result.data.commit.sha || "";
+      console.log(`[pr-update] Updated ${mod.path}, commit: ${lastCommitSha}`);
     }
 
-    // 3. Create a new tree based on the latest commit's tree
-    const { data: treeData } = await octokit.rest.git.createTree({
-      owner, repo,
-      base_tree: baseTreeSha,
-      tree: treeItems,
-    });
-
-    // 4. Create a new commit on top of the PR branch
-    const { data: commitData } = await octokit.rest.git.createCommit({
-      owner, repo,
-      message: message || "PR-Creator: iterative fix",
-      tree: treeData.sha,
-      parents: [latestCommitSha],
-    });
-
-    // 5. Update the branch ref to point to the new commit
-    await octokit.rest.git.updateRef({
-      owner, repo,
-      ref: `heads/${branch}`,
-      sha: commitData.sha,
-    });
-
-    return NextResponse.json({ sha: commitData.sha, branch });
+    console.log(`[pr-update] Success! Final commit: ${lastCommitSha}`);
+    return NextResponse.json({ sha: lastCommitSha, branch });
   } catch (error: any) {
-    console.error("PR update error:", error);
-    return NextResponse.json({ error: error.message?.slice(0, 200) }, { status: 500 });
+    console.error("[pr-update] Error:", error?.status, error?.response?.data || error?.message);
+    const detail = error?.response?.data?.message || error?.message || "Unknown error";
+    return NextResponse.json({ error: `${detail} (pushing to ${owner}/${repo})` }, { status: error?.status || 500 });
   }
 }

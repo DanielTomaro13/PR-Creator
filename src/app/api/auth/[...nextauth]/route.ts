@@ -9,7 +9,7 @@ export const authOptions: NextAuthOptions = {
       authorization: {
         params: {
           // 'repo' scope is required to read/write repositories, create branches, and open PRs.
-          scope: "read:user user:email repo",
+          scope: "read:user user:email repo workflow",
         },
       },
     }),
