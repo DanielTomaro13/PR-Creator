@@ -72,6 +72,7 @@ export default function Home() {
   const [prHistory, setPrHistory] = useState<PREntry[]>([]);
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
   const [loadingPRs, setLoadingPRs] = useState(false);
+  const [expandedRepos, setExpandedRepos] = useState<Set<string>>(new Set());
 
   // Load saved sessions from localStorage
   useEffect(() => {
@@ -219,7 +220,7 @@ export default function Home() {
               {error && <div className="error-text" style={{ marginTop: '0.75rem' }}>{error}</div>}
             </form>
 
-            {/* Cumulative Usage Stats */}
+            {/* All-Time Usage Stats */}
             {(() => {
               const totalInput = savedSessions.reduce((sum, s) => sum + (s.usage?.inputTokens || 0), 0);
               const totalOutput = savedSessions.reduce((sum, s) => sum + (s.usage?.outputTokens || 0), 0);
@@ -228,19 +229,23 @@ export default function Home() {
                 <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
                   <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
-                    Usage
+                    All-Time Usage
                   </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0.75rem' }}>
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--primary)' }}>{totalInput.toLocaleString()}</div>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--foreground)' }}>{savedSessions.length}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>Sessions</div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--primary)' }}>{totalInput.toLocaleString()}</div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>Input Tokens</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--accent)' }}>{totalOutput.toLocaleString()}</div>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent)' }}>{totalOutput.toLocaleString()}</div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>Output Tokens</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--success)' }}>${totalCost.toFixed(2)}</div>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--success)' }}>${totalCost.toFixed(2)}</div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>Total Cost</div>
                     </div>
                   </div>
@@ -283,7 +288,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* PR History */}
+            {/* PR History — grouped by repo */}
             <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <GithubIcon className="" /> Your PRs
@@ -297,18 +302,71 @@ export default function Home() {
                 <p style={{ fontSize: '0.82rem', color: 'var(--muted)', textAlign: 'center', padding: '0.5rem 0' }}>No PRs created yet. Submit a PR and it will appear here.</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  {prHistory.map((pr) => (
-                    <a key={pr.id} href={pr.url} target="_blank" rel="noreferrer" className="pr-history-card">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{pr.title}</span>
-                        {getStatusBadge(pr.state)}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--muted)', marginTop: '2px' }}>
-                        <span>{pr.repo} #{pr.number}</span>
-                        <span>{new Date(pr.createdAt).toLocaleDateString()}</span>
-                      </div>
-                    </a>
-                  ))}
+                  {(() => {
+                    const grouped: Record<string, PREntry[]> = {};
+                    prHistory.forEach(pr => {
+                      if (!grouped[pr.repo]) grouped[pr.repo] = [];
+                      grouped[pr.repo].push(pr);
+                    });
+                    return Object.entries(grouped).map(([repoName, prs]) => {
+                      const isExpanded = expandedRepos.has(repoName);
+                      const openCount = prs.filter(p => p.state === 'open').length;
+                      const mergedCount = prs.filter(p => p.state === 'merged').length;
+                      return (
+                        <div key={repoName}>
+                          <button
+                            onClick={() => {
+                              setExpandedRepos(prev => {
+                                const next = new Set(prev);
+                                if (next.has(repoName)) next.delete(repoName);
+                                else next.add(repoName);
+                                return next;
+                              });
+                            }}
+                            className="repo-group-header"
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s ease' }}><polyline points="9 18 15 12 9 6" /></svg>
+                              <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{repoName}</span>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>({prs.length})</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.4rem' }}>
+                              {openCount > 0 && <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '999px', background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }}>{openCount} open</span>}
+                              {mergedCount > 0 && <span style={{ fontSize: '0.65rem', padding: '1px 6px', borderRadius: '999px', background: 'rgba(139,92,246,0.15)', color: '#a78bfa' }}>{mergedCount} merged</span>}
+                            </div>
+                          </button>
+                          {isExpanded && (() => {
+                            const statusOrder = ['open', 'merged', 'closed'] as const;
+                            const statusColors: Record<string, string> = { open: '#60a5fa', merged: '#a78bfa', closed: '#9ca3af' };
+                            const byStatus: Record<string, PREntry[]> = {};
+                            prs.forEach(pr => {
+                              if (!byStatus[pr.state]) byStatus[pr.state] = [];
+                              byStatus[pr.state].push(pr);
+                            });
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.35rem', paddingLeft: '1.25rem' }}>
+                                {statusOrder.filter(s => byStatus[s]?.length).map(status => (
+                                  <div key={status}>
+                                    <div className="status-group-label" style={{ color: statusColors[status] }}>
+                                      {status} ({byStatus[status].length})
+                                    </div>
+                                    {byStatus[status].map(pr => (
+                                      <a key={pr.id} href={pr.url} target="_blank" rel="noreferrer" className="pr-history-card" style={{ padding: '0.5rem 0.75rem', marginBottom: '0.25rem', display: 'block' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                          <span style={{ fontWeight: 500, fontSize: '0.8rem' }}>#{pr.number} {pr.title}</span>
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>{new Date(pr.createdAt).toLocaleDateString()}</div>
+                                      </a>
+                                    ))}
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               )}
             </div>

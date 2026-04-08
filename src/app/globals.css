@@ -625,6 +625,32 @@ html, body {
   background: rgba(99, 102, 241, 0.06);
   transform: translateY(-1px);
 }
+.repo-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  background: rgba(0,0,0,0.2);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: inherit;
+  font-family: inherit;
+}
+.repo-group-header:hover {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.06);
+}
+.status-group-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.35rem 0 0.15rem;
+  margin-top: 0.25rem;
+}
 
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar { width: 6px; }
