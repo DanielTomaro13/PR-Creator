@@ -68,7 +68,7 @@ const TerminalIcon = () => (
 );
 
 export function Workspace({ repoContext, onReset, activePR }: { repoContext: RepoContext; onReset: () => void; activePR?: { url: string; title: string; number: number; owner: string; repo: string } | null }) {
-  const [modelId, setModelId] = useState("claude-opus-4-6");
+  const [modelId, setModelId] = useState("gemini-2.5-pro");
   const [prompt, setPrompt] = useState("");
   const [isAgentRunning, setIsAgentRunning] = useState(false);
   const [modifications, setModifications] = useState<{ path: string; originalContent: string; content: string }[] | null>(null);
@@ -390,7 +390,18 @@ ${filesChanged}
     <div className="page-workspace animate-fade-in">
       {/* ── Sidebar ── */}
       <div className="sidebar">
-        {/* Repo info */}
+        {/* Home link */}
+        <button
+          onClick={onReset}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'none', border: 'none',
+            color: 'var(--primary)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700,
+            padding: '0.5rem 0', fontFamily: 'inherit', marginBottom: '0.25rem',
+          }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
+          <span className="text-gradient" style={{ fontSize: '0.95rem' }}>PR-Creator</span>
+        </button>
         <div className="glass-panel" style={{ padding: '1.25rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
             <div>
@@ -491,7 +502,8 @@ ${filesChanged}
                 <select value={modelId} onChange={(e) => setModelId(e.target.value)}>
                   <option value="claude-opus-4-6">Claude Opus 4.6 (Premium)</option>
                   <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (Fast)</option>
-                  <option value="gemini-2.5-pro">Gemini 2.5 Pro (Free)</option>
+                  <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fastest)</option>
                 </select>
               </div>
             </div>
