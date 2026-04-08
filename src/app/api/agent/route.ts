@@ -133,9 +133,18 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
     const isLastIteration = i === MAX_ITERATIONS - 1;
     sendEvent(controller, "status", { message: `Thinking... (iteration ${i + 1}/${MAX_ITERATIONS})`, step: "thinking" });
 
+    // On the last iteration, inject a strong forcing message
+    if (isLastIteration) {
+      messages.push({
+        role: "user",
+        content: "STOP exploring files. You MUST now output your final answer as a JSON array of file modifications. Output ONLY the JSON array, no explanations. Format: [{\"path\": \"...\", \"content\": \"...\"}]"
+      });
+      sendEvent(controller, "status", { message: "Forcing final JSON output...", step: "forcing" });
+    }
+
     const completion = await anthropic.messages.create({
       model: modelId,
-      max_tokens: 16000,
+      max_tokens: 64000,
       system: systemPrompt,
       messages,
       // Drop tools on last iteration to force the agent to produce output
@@ -328,7 +337,8 @@ async function emitResult(
 
   const jsonMatch = rawResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);
   if (!jsonMatch) {
-    sendEvent(controller, "error", { message: `Agent did not return valid JSON. Raw: ${rawResponse.slice(0, 200)}` });
+    const preview = rawResponse.slice(0, 300).replace(/\n/g, ' ');
+    sendEvent(controller, "error", { message: `Agent did not return valid JSON modifications. The model said: "${preview}..."` });
     return;
   }
 
