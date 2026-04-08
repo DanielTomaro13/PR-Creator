@@ -142,7 +142,7 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
       sendEvent(controller, "status", { message: "Forcing final JSON output...", step: "forcing" });
     }
 
-    const completion = await anthropic.messages.create({
+    const stream = anthropic.messages.stream({
       model: modelId,
       max_tokens: 64000,
       system: systemPrompt,
@@ -150,6 +150,7 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
       // Drop tools on last iteration to force the agent to produce output
       tools: isLastIteration ? undefined : [readGithubFile as any],
     });
+    const completion = await stream.finalMessage();
 
     totalInputTokens += completion.usage.input_tokens;
     totalOutputTokens += completion.usage.output_tokens;
