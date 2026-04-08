@@ -75,6 +75,8 @@ export default function Home() {
   const [expandedRepos, setExpandedRepos] = useState<Set<string>>(new Set());
   const [activePR, setActivePR] = useState<{ url: string; title: string; number: number; owner: string; repo: string } | null>(null);
   const [loadingPR, setLoadingPR] = useState<string | null>(null);
+  const [providerStatus, setProviderStatus] = useState<any[]>([]);
+  const [loadingProviders, setLoadingProviders] = useState(false);
 
   // Load saved sessions from localStorage
   useEffect(() => {
@@ -96,6 +98,18 @@ export default function Home() {
         .then(data => { if (data.prs) setPrHistory(data.prs); })
         .catch(() => {})
         .finally(() => setLoadingPRs(false));
+    }
+  }, [session]);
+
+  // Fetch provider status when authenticated
+  useEffect(() => {
+    if (session?.accessToken) {
+      setLoadingProviders(true);
+      fetch("/api/provider-status")
+        .then(r => r.json())
+        .then(data => { if (data.providers) setProviderStatus(data.providers); })
+        .catch(() => {})
+        .finally(() => setLoadingProviders(false));
     }
   }, [session]);
 
@@ -248,38 +262,39 @@ export default function Home() {
               {error && <div className="error-text" style={{ marginTop: '0.75rem' }}>{error}</div>}
             </form>
 
-            {/* All-Time Usage Stats */}
-            {(() => {
-              const totalInput = savedSessions.reduce((sum, s) => sum + (s.usage?.inputTokens || 0), 0);
-              const totalOutput = savedSessions.reduce((sum, s) => sum + (s.usage?.outputTokens || 0), 0);
-              const totalCost = savedSessions.reduce((sum, s) => sum + (s.usage?.estimatedCostUsd || 0), 0);
-              return (
-                <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
-                  <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
-                    All-Time Usage
-                  </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0.75rem' }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--foreground)' }}>{savedSessions.length}</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>Sessions</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--primary)' }}>{totalInput.toLocaleString()}</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>Input Tokens</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--accent)' }}>{totalOutput.toLocaleString()}</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>Output Tokens</div>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--success)' }}>${totalCost.toFixed(2)}</div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>Total Cost</div>
-                    </div>
-                  </div>
+            {/* Provider Status */}
+            <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
+                API Status
+              </h3>
+              {loadingProviders ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--muted)', fontSize: '0.82rem' }}>
+                  <div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5 }} />
+                  Checking provider availability...
                 </div>
-              );
-            })()}
+              ) : providerStatus.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {providerStatus.map((p: any) => (
+                    <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0.75rem', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-sm)', borderLeft: `3px solid ${p.status === 'available' ? 'var(--success)' : p.status === 'no_key' ? 'var(--muted)' : 'var(--error)'}` }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{p.name}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '1px' }}>{p.message}</div>
+                      </div>
+                      <span style={{
+                        fontSize: '0.65rem', padding: '2px 8px', borderRadius: '999px', fontWeight: 600,
+                        background: p.status === 'available' ? 'rgba(52,211,153,0.15)' : p.status === 'no_key' ? 'rgba(107,114,128,0.15)' : 'rgba(239,68,68,0.15)',
+                        color: p.status === 'available' ? 'var(--success)' : p.status === 'no_key' ? 'var(--muted)' : 'var(--error)',
+                      }}>
+                        {p.status === 'available' ? '● READY' : p.status === 'no_key' ? '○ NO KEY' : '● EXHAUSTED'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>No provider info available.</p>
+              )}
+            </div>
 
             {/* Session History */}
             <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
