@@ -27,15 +27,30 @@ export async function POST(req: Request) {
 
     if (!isOwnRepo) {
       // Fork the repo — GitHub returns the existing fork if one already exists
+      console.log(`Forking ${owner}/${repo} for cross-repo PR...`);
       const { data: fork } = await octokit.rest.repos.createFork({
         owner,
         repo,
       });
       targetOwner = fork.owner.login;
       headPrefix = `${targetOwner}:`;
+      console.log(`Fork created/found: ${targetOwner}/${repo}`);
 
-      // Wait for fork to be ready (GitHub sometimes takes a moment)
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      // Poll until fork is ready (GitHub can take up to ~30s to provision)
+      for (let attempt = 0; attempt < 15; attempt++) {
+        try {
+          await octokit.rest.git.getRef({
+            owner: targetOwner,
+            repo,
+            ref: `heads/${defaultBranch}`,
+          });
+          console.log(`Fork ready on attempt ${attempt + 1}`);
+          break;
+        } catch {
+          console.log(`Fork not ready yet, waiting... (attempt ${attempt + 1}/15)`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      }
     }
 
     // 1. Get latest commit SHA of default branch from the target (fork or original)
