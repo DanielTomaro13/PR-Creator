@@ -13,12 +13,12 @@ export async function GET() {
     const octokit = new Octokit({ auth: session.accessToken });
     const { data: user } = await octokit.rest.users.getAuthenticated();
 
-    // Search for PRs created by this user with "PR-Creator" in the title
+    // Search for all PRs created by this user
     const { data: searchResult } = await octokit.rest.search.issuesAndPullRequests({
-      q: `author:${user.login} type:pr "PR-Creator" in:title`,
+      q: `author:${user.login} type:pr`,
       sort: "created",
       order: "desc",
-      per_page: 20,
+      per_page: 30,
     });
 
     const prs = searchResult.items.map((item: any) => {
