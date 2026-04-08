@@ -78,6 +78,7 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
   const [error, setError] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -99,6 +100,9 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
 
     addLog("status", `Starting agent with ${modelId}...`);
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const res = await fetch("/api/agent", {
         method: "POST",
@@ -111,6 +115,7 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
           prompt,
           modelId,
         }),
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -148,12 +153,21 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
         }
       }
     } catch (err: any) {
-      const msg = err.message?.length > 200 ? err.message.slice(0, 200) + "..." : err.message;
-      setError(msg);
-      addLog("error", msg);
+      if (err.name === 'AbortError') {
+        addLog("status", "Agent stopped by user.");
+      } else {
+        const msg = err.message?.length > 200 ? err.message.slice(0, 200) + "..." : err.message;
+        setError(msg);
+        addLog("error", msg);
+      }
     } finally {
+      abortControllerRef.current = null;
       setIsAgentRunning(false);
     }
+  };
+
+  const handleStop = () => {
+    abortControllerRef.current?.abort();
   };
 
   const handleSSEEvent = (event: string, data: any) => {
@@ -328,7 +342,7 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
                 <CpuIcon />
                 <select value={modelId} onChange={(e) => setModelId(e.target.value)}>
                   <option value="claude-opus-4-6">Claude Opus 4.6 (Premium)</option>
-                  <option value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet (Fast)</option>
+                  <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (Fast)</option>
                   <option value="gemini-2.5-pro">Gemini 2.5 Pro (Free)</option>
                 </select>
               </div>
@@ -342,7 +356,13 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
               required
             />
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+              {isAgentRunning && (
+                <button type="button" onClick={handleStop} className="btn-stop">
+                  <XIcon />
+                  Stop
+                </button>
+              )}
               <button type="submit" disabled={isAgentRunning || !prompt} className="btn-primary">
                 {isAgentRunning ? (
                   <>

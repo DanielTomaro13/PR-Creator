@@ -278,6 +278,25 @@ html, body {
 
 .btn-success:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.btn-stop {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: 1px solid var(--error);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--error);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-stop:hover {
+  background: rgba(239, 68, 68, 0.25);
+  transform: translateY(-1px);
+}
+
 /* ── LOGO BADGE ── */
 .logo-badge {
   display: inline-flex;
