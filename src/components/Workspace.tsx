@@ -568,25 +568,80 @@ ${filesChanged}
                 {prDetails.checkRuns?.length > 0 && (
                   <div>
                     <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>CI / Checks</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                      {prDetails.checkRuns.map((check: any, i: number) => (
-                        <span
-                          key={i}
-                          style={{
-                            fontSize: '0.72rem', padding: '2px 8px', borderRadius: '999px', cursor: check.url ? 'pointer' : 'default',
-                            background: check.conclusion === 'success' ? 'rgba(52,211,153,0.15)' : check.conclusion === 'failure' ? 'rgba(239,68,68,0.15)' : 'rgba(107,114,128,0.15)',
-                            color: check.conclusion === 'success' ? 'var(--success)' : check.conclusion === 'failure' ? 'var(--error)' : 'var(--muted)',
-                          }}
-                          onClick={() => {
-                            if (check.conclusion === 'failure') {
-                              setPrompt(`Fix failing CI check "${check.name}":\n\n${check.output || 'No output available'}`);
-                            }
-                            if (check.url) window.open(check.url, '_blank');
-                          }}
-                        >
-                          {check.conclusion === 'success' ? '✓' : check.conclusion === 'failure' ? '✗' : '○'} {check.name}
-                        </span>
-                      ))}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      {prDetails.checkRuns.map((check: any, i: number) => {
+                        const isFailing = check.conclusion === 'failure';
+                        const hasDetails = isFailing && (check.annotations?.length > 0 || check.logs);
+                        return (
+                          <div key={i} style={{ background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                            <div
+                              style={{
+                                display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0.6rem', cursor: 'pointer',
+                                borderLeft: `3px solid ${check.conclusion === 'success' ? 'var(--success)' : isFailing ? 'var(--error)' : 'var(--muted)'}`,
+                              }}
+                              onClick={() => {
+                                if (hasDetails) {
+                                  const el = document.getElementById(`check-${i}`);
+                                  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+                                } else if (check.url) {
+                                  window.open(check.url, '_blank');
+                                }
+                              }}
+                            >
+                              <span style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <span style={{ color: check.conclusion === 'success' ? 'var(--success)' : isFailing ? 'var(--error)' : 'var(--muted)' }}>
+                                  {check.conclusion === 'success' ? '✓' : isFailing ? '✗' : '○'}
+                                </span>
+                                {check.name}
+                                {hasDetails && <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>▼ expand</span>}
+                              </span>
+                              {isFailing && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const annotationText = check.annotations?.map((a: any) => `${a.path}:${a.startLine} — ${a.message}`).join('\n') || '';
+                                    const logSnippet = check.logs?.slice(-1500) || '';
+                                    setPrompt(`Fix failing CI check "${check.name}":\n\n${annotationText ? `Annotations:\n${annotationText}\n\n` : ''}${logSnippet ? `Test Logs (last 1500 chars):\n${logSnippet}` : check.output || 'No output available'}`);
+                                  }}
+                                  className="btn-primary"
+                                  style={{ fontSize: '0.65rem', padding: '2px 8px', gap: '0.25rem' }}
+                                >
+                                  Fix with AI →
+                                </button>
+                              )}
+                            </div>
+                            {hasDetails && (
+                              <div id={`check-${i}`} style={{ display: 'none', padding: '0.5rem 0.6rem', borderTop: '1px solid var(--surface-border)' }}>
+                                {check.annotations?.length > 0 && (
+                                  <div style={{ marginBottom: '0.5rem' }}>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--error)', marginBottom: '0.25rem' }}>Annotations ({check.annotations.length})</div>
+                                    {check.annotations.map((a: any, j: number) => (
+                                      <div key={j} style={{ fontSize: '0.75rem', padding: '0.3rem', background: 'rgba(239,68,68,0.06)', borderRadius: '4px', marginBottom: '0.2rem' }}>
+                                        <code style={{ fontSize: '0.7rem', color: 'var(--primary)' }}>{a.path}:{a.startLine}</code>
+                                        {a.title && <span style={{ color: 'var(--error)', fontWeight: 600, marginLeft: '0.5rem' }}>{a.title}</span>}
+                                        <div style={{ color: 'var(--foreground)', marginTop: '2px' }}>{a.message}</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {check.logs && (
+                                  <div>
+                                    <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '0.25rem' }}>Logs (last 3000 chars)</div>
+                                    <pre style={{
+                                      fontSize: '0.68rem', color: 'var(--foreground)', background: 'rgba(0,0,0,0.4)',
+                                      padding: '0.5rem', borderRadius: '4px', maxHeight: '300px', overflowY: 'auto',
+                                      whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.4,
+                                      fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+                                    }}>
+                                      {check.logs}
+                                    </pre>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

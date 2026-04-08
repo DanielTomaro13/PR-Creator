@@ -37,12 +37,62 @@ export async function POST(req: Request) {
       const { data: checks } = await octokit.rest.checks.listForRef({
         owner, repo, ref: pr.head.sha, per_page: 50,
       });
-      checkRuns = checks.check_runs.map((run: any) => ({
-        name: run.name,
-        status: run.status,
-        conclusion: run.conclusion,
-        url: run.html_url,
-        output: run.output?.summary?.slice(0, 500) || "",
+
+      checkRuns = await Promise.all(checks.check_runs.map(async (run: any) => {
+        const result: any = {
+          id: run.id,
+          name: run.name,
+          status: run.status,
+          conclusion: run.conclusion,
+          url: run.html_url,
+          output: run.output?.summary?.slice(0, 1000) || "",
+          annotations: [],
+          logs: "",
+        };
+
+        // For failing checks, fetch annotations (contain test error details)
+        if (run.conclusion === 'failure' || run.conclusion === 'action_required') {
+          try {
+            const { data: annotations } = await octokit.rest.checks.listAnnotations({
+              owner, repo, check_run_id: run.id, per_page: 30,
+            });
+            result.annotations = annotations.map((a: any) => ({
+              path: a.path,
+              startLine: a.start_line,
+              endLine: a.end_line,
+              level: a.annotation_level,
+              message: a.message,
+              title: a.title || "",
+            }));
+          } catch { /* annotations may not be available */ }
+
+          // Try to fetch job logs for this failing check
+          try {
+            // Find the workflow run associated with this check
+            const { data: workflowRuns } = await octokit.rest.actions.listWorkflowRunsForRepo({
+              owner, repo, head_sha: pr.head.sha, per_page: 5,
+            });
+            for (const wfRun of workflowRuns.workflow_runs) {
+              const { data: jobs } = await octokit.rest.actions.listJobsForWorkflowRun({
+                owner, repo, run_id: wfRun.id,
+              });
+              const matchingJob = jobs.jobs.find((j: any) => j.name === run.name && j.conclusion === 'failure');
+              if (matchingJob) {
+                try {
+                  const logResponse = await octokit.rest.actions.downloadJobLogsForWorkflowRun({
+                    owner, repo, job_id: matchingJob.id,
+                  });
+                  // logResponse.data is the log text (can be large), truncate to last 3000 chars
+                  const logText = typeof logResponse.data === 'string' ? logResponse.data : String(logResponse.data);
+                  result.logs = logText.slice(-3000);
+                } catch { /* log download may fail */ }
+                break;
+              }
+            }
+          } catch { /* workflow run lookup may fail */ }
+        }
+
+        return result;
       }));
     } catch { /* checks API might not be available */ }
 
