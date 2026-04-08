@@ -302,20 +302,18 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
           )}
         </div>
 
-        {/* Usage widget */}
-        {usage && (
-          <div className="glass-panel usage-widget animate-fade-in">
-            <h3 className="section-title">
-              <ActivityIcon />
-              Usage
-              <span className="usage-provider-tag">{usage.provider}</span>
-            </h3>
-            <div className="usage-row"><span className="label">Input Tokens</span><span>{usage.inputTokens.toLocaleString()}</span></div>
-            <div className="usage-row"><span className="label">Output Tokens</span><span>{usage.outputTokens.toLocaleString()}</span></div>
-            <div className="usage-divider" />
-            <div className="usage-total"><span>Est. Cost</span><span>${usage.estimatedCostUsd.toFixed(4)}</span></div>
-          </div>
-        )}
+        {/* Usage widget — always visible */}
+        <div className="glass-panel usage-widget animate-fade-in">
+          <h3 className="section-title">
+            <ActivityIcon />
+            Usage
+            {usage && <span className="usage-provider-tag">{usage.provider}</span>}
+          </h3>
+          <div className="usage-row"><span className="label">Input Tokens</span><span>{(usage?.inputTokens ?? 0).toLocaleString()}</span></div>
+          <div className="usage-row"><span className="label">Output Tokens</span><span>{(usage?.outputTokens ?? 0).toLocaleString()}</span></div>
+          <div className="usage-divider" />
+          <div className="usage-total"><span>Est. Cost</span><span>${(usage?.estimatedCostUsd ?? 0).toFixed(4)}</span></div>
+        </div>
       </div>
 
       {/* ── Main Area ── */}
