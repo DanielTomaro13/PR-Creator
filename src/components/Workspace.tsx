@@ -315,7 +315,7 @@ export function Workspace({ repoContext, onReset, activePR }: { repoContext: Rep
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            owner: activePR!.owner, repo: activePR!.repo,
+            owner: prDetails.headOwner || activePR!.owner, repo: prDetails.headRepo || activePR!.repo,
             branch: prDetails.branch, modifications,
             message: `PR-Creator: fix — ${prompt.split('\n')[0].slice(0, 60)}`,
           }),

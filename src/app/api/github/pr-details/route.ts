@@ -131,6 +131,8 @@ export async function POST(req: Request) {
       body: pr.body,
       state: pr.state,
       branch: pr.head.ref,
+      headOwner: pr.head.repo?.owner?.login || owner,
+      headRepo: pr.head.repo?.name || repo,
       baseBranch: pr.base.ref,
       reviewComments: formattedReviewComments,
       issueComments: formattedIssueComments,
