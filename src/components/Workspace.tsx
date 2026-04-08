@@ -121,7 +121,7 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
       drawFileList: false,
       matching: "lines",
       outputFormat: "line-by-line",
-      colorScheme: "dark",
+      colorScheme: "dark" as any,
     });
 
     return <div dangerouslySetInnerHTML={{ __html: html }} className="diff-wrapper" />;
