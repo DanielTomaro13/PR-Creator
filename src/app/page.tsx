@@ -127,11 +127,6 @@ export default function Home() {
                 </button>
               </div>
             </form>
-            {error && <div className="error-text">{error}</div>}
-            <div className="hint-bar">
-              <SettingsIcon />
-              <span>Add your AI API keys to <code>.env.local</code> to use the agent</span>
-            </div>
           </div>
         )}
       </div>

@@ -127,11 +127,11 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
 
-  const MAX_ITERATIONS = 10;
+  const MAX_ITERATIONS = 25; // Safety valve only — agent normally stops on its own
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const isLastIteration = i === MAX_ITERATIONS - 1;
-    sendEvent(controller, "status", { message: `Thinking... (iteration ${i + 1}/${MAX_ITERATIONS})`, step: "thinking" });
+    sendEvent(controller, "status", { message: `Thinking... (iteration ${i + 1})`, step: "thinking" });
 
     // On the last iteration, inject a strong forcing message
     if (isLastIteration) {
@@ -258,11 +258,11 @@ DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
 
-  const MAX_ITERATIONS = 10;
+  const MAX_ITERATIONS = 25;
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     const isLastIteration = i === MAX_ITERATIONS - 1;
-    sendEvent(controller, "status", { message: `Thinking... (iteration ${i + 1}/${MAX_ITERATIONS})`, step: "thinking" });
+    sendEvent(controller, "status", { message: `Thinking... (iteration ${i + 1})`, step: "thinking" });
 
     const response = await ai.models.generateContent({
       model: modelId,
