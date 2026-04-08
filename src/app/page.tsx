@@ -73,6 +73,8 @@ export default function Home() {
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
   const [loadingPRs, setLoadingPRs] = useState(false);
   const [expandedRepos, setExpandedRepos] = useState<Set<string>>(new Set());
+  const [activePR, setActivePR] = useState<{ url: string; title: string } | null>(null);
+  const [loadingPR, setLoadingPR] = useState<string | null>(null);
 
   // Load saved sessions from localStorage
   useEffect(() => {
@@ -121,6 +123,31 @@ export default function Home() {
     }
   };
 
+  const handleOpenPR = async (pr: PREntry) => {
+    if (pr.state !== 'open') {
+      window.open(pr.url, '_blank');
+      return;
+    }
+    setLoadingPR(pr.url);
+    setError("");
+    try {
+      const repoUrl = `https://github.com/${pr.repo}`;
+      const res = await fetch("/api/github/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repoUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load repository");
+      setActivePR({ url: pr.url, title: pr.title });
+      setRepoContext(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoadingPR(null);
+    }
+  };
+
   const clearSessions = () => {
     localStorage.removeItem('pr-creator-sessions');
     sessionStorage.removeItem('pr-creator-session-id');
@@ -157,7 +184,7 @@ export default function Home() {
   }
 
   if (repoContext) {
-    return <Workspace repoContext={repoContext} onReset={() => setRepoContext(null)} />;
+    return <Workspace repoContext={repoContext} onReset={() => { setRepoContext(null); setActivePR(null); }} activePR={activePR} />;
   }
 
   return (
@@ -351,12 +378,24 @@ export default function Home() {
                                       {status} ({byStatus[status].length})
                                     </div>
                                     {byStatus[status].map(pr => (
-                                      <a key={pr.id} href={pr.url} target="_blank" rel="noreferrer" className="pr-history-card" style={{ padding: '0.5rem 0.75rem', marginBottom: '0.25rem', display: 'block' }}>
+                                      <div
+                                        key={pr.id}
+                                        onClick={() => handleOpenPR(pr)}
+                                        className="pr-history-card"
+                                        style={{ padding: '0.5rem 0.75rem', marginBottom: '0.25rem', display: 'block', cursor: 'pointer' }}
+                                      >
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                           <span style={{ fontWeight: 500, fontSize: '0.8rem' }}>#{pr.number} {pr.title}</span>
+                                          {loadingPR === pr.url ? (
+                                            <div className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} />
+                                          ) : pr.state === 'open' ? (
+                                            <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>→ workspace</span>
+                                          ) : (
+                                            <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>↗ github</span>
+                                          )}
                                         </div>
                                         <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '2px' }}>{new Date(pr.createdAt).toLocaleDateString()}</div>
-                                      </a>
+                                      </div>
                                     ))}
                                   </div>
                                 ))}

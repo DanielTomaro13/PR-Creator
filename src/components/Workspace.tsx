@@ -67,14 +67,14 @@ const TerminalIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
 );
 
-export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; onReset: () => void }) {
+export function Workspace({ repoContext, onReset, activePR }: { repoContext: RepoContext; onReset: () => void; activePR?: { url: string; title: string } | null }) {
   const [modelId, setModelId] = useState("claude-opus-4-6");
   const [prompt, setPrompt] = useState("");
   const [isAgentRunning, setIsAgentRunning] = useState(false);
   const [modifications, setModifications] = useState<{ path: string; originalContent: string; content: string }[] | null>(null);
   const [usage, setUsage] = useState<AgentUsage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [prUrl, setPrUrl] = useState<string | null>(null);
+  const [prUrl, setPrUrl] = useState<string | null>(activePR?.url || null);
   const [error, setError] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [summary, setSummary] = useState("");
