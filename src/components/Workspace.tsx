@@ -67,7 +67,7 @@ const TerminalIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
 );
 
-export function Workspace({ repoContext, onReset, activePR }: { repoContext: RepoContext; onReset: () => void; activePR?: { url: string; title: string } | null }) {
+export function Workspace({ repoContext, onReset, activePR }: { repoContext: RepoContext; onReset: () => void; activePR?: { url: string; title: string; number: number; owner: string; repo: string } | null }) {
   const [modelId, setModelId] = useState("claude-opus-4-6");
   const [prompt, setPrompt] = useState("");
   const [isAgentRunning, setIsAgentRunning] = useState(false);
@@ -83,12 +83,57 @@ export function Workspace({ repoContext, onReset, activePR }: { repoContext: Rep
   const [prBranch, setPrBranch] = useState("");
   const [repoExplanation, setRepoExplanation] = useState("");
   const [isExplaining, setIsExplaining] = useState(false);
+  const [prDetails, setPrDetails] = useState<any>(null);
+  const [loadingPRDetails, setLoadingPRDetails] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [postingComment, setPostingComment] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
+
+  // Auto-fetch PR details when opened from an active PR
+  useEffect(() => {
+    if (activePR?.number) {
+      setLoadingPRDetails(true);
+      fetch("/api/github/pr-details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owner: activePR.owner, repo: activePR.repo, prNumber: activePR.number }),
+      })
+        .then(r => r.json())
+        .then(data => { if (!data.error) setPrDetails(data); })
+        .catch(() => {})
+        .finally(() => setLoadingPRDetails(false));
+    }
+  }, [activePR?.number]);
+
+  const handlePostComment = async (replyToId?: number) => {
+    if (!commentText.trim() || !activePR) return;
+    setPostingComment(true);
+    try {
+      await fetch("/api/github/pr-comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          owner: activePR.owner, repo: activePR.repo, prNumber: activePR.number,
+          body: commentText, replyToCommentId: replyToId,
+        }),
+      });
+      setCommentText("");
+      // Refresh PR details
+      const res = await fetch("/api/github/pr-details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ owner: activePR.owner, repo: activePR.repo, prNumber: activePR.number }),
+      });
+      const data = await res.json();
+      if (!data.error) setPrDetails(data);
+    } catch { /* ignore */ }
+    finally { setPostingComment(false); }
+  };
 
   // Manual repo explanation
   const handleExplainRepo = () => {
@@ -484,6 +529,138 @@ ${filesChanged}
             {error && <div className="error-text">{error}</div>}
           </form>
         </div>
+
+        {/* PR Review Panel — shown when working on an active PR */}
+        {activePR && (
+          <div className="glass-panel animate-fade-in" style={{ padding: '1.25rem' }}>
+            <h3 className="section-title" style={{ marginBottom: '0.75rem' }}>
+              <GitPRIcon />
+              PR #{activePR.number}: {activePR.title}
+              <a href={activePR.url} target="_blank" rel="noreferrer" style={{ fontSize: '0.7rem', color: 'var(--muted)', marginLeft: 'auto' }}>↗ GitHub</a>
+            </h3>
+
+            {loadingPRDetails ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--muted)', fontSize: '0.85rem' }}>
+                <div className="spinner" style={{ width: 14, height: 14, borderWidth: 1.5 }} />
+                Loading PR details...
+              </div>
+            ) : prDetails ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {/* Reviews (approvals, changes requested) */}
+                {prDetails.reviews?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reviews</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      {prDetails.reviews.map((r: any) => (
+                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', padding: '0.35rem 0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-sm)' }}>
+                          <span style={{ color: r.state === 'APPROVED' ? 'var(--success)' : r.state === 'CHANGES_REQUESTED' ? 'var(--error)' : 'var(--muted)', fontWeight: 600, fontSize: '0.7rem' }}>
+                            {r.state === 'APPROVED' ? '✓ APPROVED' : r.state === 'CHANGES_REQUESTED' ? '✗ CHANGES REQUESTED' : r.state}
+                          </span>
+                          <span style={{ color: 'var(--muted)' }}>by {r.user}</span>
+                          {r.body && <span style={{ color: 'var(--foreground)', marginLeft: '0.25rem' }}>— {r.body.slice(0, 100)}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Check Runs (CI/CD results) */}
+                {prDetails.checkRuns?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>CI / Checks</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                      {prDetails.checkRuns.map((check: any, i: number) => (
+                        <span
+                          key={i}
+                          style={{
+                            fontSize: '0.72rem', padding: '2px 8px', borderRadius: '999px', cursor: check.url ? 'pointer' : 'default',
+                            background: check.conclusion === 'success' ? 'rgba(52,211,153,0.15)' : check.conclusion === 'failure' ? 'rgba(239,68,68,0.15)' : 'rgba(107,114,128,0.15)',
+                            color: check.conclusion === 'success' ? 'var(--success)' : check.conclusion === 'failure' ? 'var(--error)' : 'var(--muted)',
+                          }}
+                          onClick={() => {
+                            if (check.conclusion === 'failure') {
+                              setPrompt(`Fix failing CI check "${check.name}":\n\n${check.output || 'No output available'}`);
+                            }
+                            if (check.url) window.open(check.url, '_blank');
+                          }}
+                        >
+                          {check.conclusion === 'success' ? '✓' : check.conclusion === 'failure' ? '✗' : '○'} {check.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Review Comments (inline code comments) */}
+                {prDetails.reviewComments?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Code Review Comments ({prDetails.reviewComments.length})
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', maxHeight: '250px', overflowY: 'auto' }}>
+                      {prDetails.reviewComments.map((c: any) => (
+                        <div
+                          key={c.id}
+                          onClick={() => setPrompt(`Fix review comment by ${c.user} on ${c.path}${c.line ? `:${c.line}` : ''}:\n\n"${c.body}"`)}
+                          style={{ padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: '1px solid transparent', transition: 'border-color 0.15s' }}
+                          onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--primary)')}
+                          onMouseLeave={e => (e.currentTarget.style.borderColor = 'transparent')}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--muted)', marginBottom: '0.2rem' }}>
+                            <span><strong>{c.user}</strong> on <code style={{ fontSize: '0.7rem' }}>{c.path}{c.line ? `:${c.line}` : ''}</code></span>
+                            <span style={{ fontSize: '0.6rem' }}>click to fix →</span>
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--foreground)', lineHeight: 1.5 }}>{c.body.slice(0, 200)}{c.body.length > 200 ? '...' : ''}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Issue Comments (general conversation) */}
+                {prDetails.issueComments?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Comments ({prDetails.issueComments.length})
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', maxHeight: '200px', overflowY: 'auto' }}>
+                      {prDetails.issueComments.map((c: any) => (
+                        <div key={c.id} style={{ padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: 'var(--radius-sm)' }}>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginBottom: '0.2rem' }}>
+                            <strong>{c.user}</strong> • {new Date(c.createdAt).toLocaleDateString()}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--foreground)', lineHeight: 1.5 }}>{c.body.slice(0, 300)}{c.body.length > 300 ? '...' : ''}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Post Comment */}
+                <div style={{ borderTop: '1px solid var(--surface-border)', paddingTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    value={commentText}
+                    onChange={e => setCommentText(e.target.value)}
+                    placeholder="Write a comment on this PR..."
+                    className="input-base"
+                    style={{ flex: 1, fontSize: '0.85rem', padding: '0.5rem 0.75rem' }}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePostComment(); }}}
+                  />
+                  <button
+                    onClick={() => handlePostComment()}
+                    disabled={postingComment || !commentText.trim()}
+                    className="btn-primary"
+                    style={{ fontSize: '0.8rem', padding: '0.5rem 1rem' }}
+                  >
+                    {postingComment ? <div className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} /> : 'Comment'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>No PR details available.</p>
+            )}
+          </div>
+        )}
 
         {/* Live Activity Log */}
         {(isAgentRunning || logs.length > 0) && !modifications && (

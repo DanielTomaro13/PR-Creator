@@ -73,7 +73,7 @@ export default function Home() {
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
   const [loadingPRs, setLoadingPRs] = useState(false);
   const [expandedRepos, setExpandedRepos] = useState<Set<string>>(new Set());
-  const [activePR, setActivePR] = useState<{ url: string; title: string } | null>(null);
+  const [activePR, setActivePR] = useState<{ url: string; title: string; number: number; owner: string; repo: string } | null>(null);
   const [loadingPR, setLoadingPR] = useState<string | null>(null);
 
   // Load saved sessions from localStorage
@@ -139,7 +139,8 @@ export default function Home() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load repository");
-      setActivePR({ url: pr.url, title: pr.title });
+      const [prOwner, prRepo] = pr.repo.split('/');
+      setActivePR({ url: pr.url, title: pr.title, number: pr.number, owner: prOwner, repo: prRepo });
       setRepoContext(data);
     } catch (err: any) {
       setError(err.message);
