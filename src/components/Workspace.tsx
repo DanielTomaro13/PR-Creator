@@ -29,7 +29,7 @@ export interface AgentUsage {
 }
 
 interface LogEntry {
-  id: number;
+  id: string;
   type: "status" | "tool" | "tool_done" | "tool_error" | "usage" | "error";
   message: string;
   timestamp: Date;
@@ -78,15 +78,14 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
   const [error, setError] = useState("");
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logEndRef = useRef<HTMLDivElement>(null);
-  let logCounter = useRef(0);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs]);
 
   const addLog = (type: LogEntry["type"], message: string) => {
-    logCounter.current++;
-    setLogs(prev => [...prev, { id: logCounter.current, type, message, timestamp: new Date() }]);
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setLogs(prev => [...prev, { id, type, message, timestamp: new Date() }]);
   };
 
   const handleRunAgent = async (e: React.FormEvent) => {
