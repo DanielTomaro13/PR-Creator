@@ -608,6 +608,24 @@ html, body {
 .merge-bar h3 { font-size: 1.1rem; font-weight: 700; }
 .merge-bar p { font-size: 0.8rem; color: var(--muted); margin-top: 0.15rem; }
 
+/* ── SESSION & PR HISTORY CARDS ── */
+.session-card, .pr-history-card {
+  display: block;
+  padding: 0.75rem;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+.session-card:hover, .pr-history-card:hover {
+  border-color: var(--primary);
+  background: rgba(99, 102, 241, 0.06);
+  transform: translateY(-1px);
+}
+
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

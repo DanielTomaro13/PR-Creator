@@ -13,6 +13,8 @@ type ContextParam = {
   files: string[];
   prompt: string;
   modelId: string;
+  reviewFeedback?: string;
+  previousModifications?: { path: string; content: string }[];
 }
 
 // Helper: send an SSE event
@@ -105,19 +107,33 @@ Your goal is to complete the user's request:
 <request>
 ${prompt}
 </request>
+${context.reviewFeedback ? `
+The user has provided review feedback on your previous changes. Please address this feedback:
+<review_feedback>
+${context.reviewFeedback}
+</review_feedback>
 
+Your previous modifications were to these files: ${context.previousModifications?.map(m => m.path).join(', ') || 'none'}
+` : ''}
 If you need to explore code, use the read_github_file tool.
 Once you understand the codebase and know what to change, provide the final output.
-Your final output MUST be a JSON array of files to modify, structured exactly like this:
+Your final output MUST be a JSON object with two fields:
+1. "summary" - A clear, detailed description of what you changed and why (2-4 paragraphs, markdown formatted)
+2. "modifications" - An array of files to modify
+
+Output format:
 \`\`\`json
-[
-  {
-    "path": "path/to/file.ts",
-    "content": "the complete rewritten raw string content of the file"
-  }
-]
+{
+  "summary": "## Summary\n\nDescribe what was changed and why...",
+  "modifications": [
+    {
+      "path": "path/to/file.ts",
+      "content": "the complete rewritten raw string content of the file"
+    }
+  ]
+}
 \`\`\`
-DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
+Output ONLY the JSON object. No other text.`;
 
   let messages: any[] = [
     { role: "user", content: "Please begin. Read whichever files you need, then provide the JSON of modifications." }
@@ -228,19 +244,33 @@ Your goal is to complete the user's request:
 <request>
 ${prompt}
 </request>
+${context.reviewFeedback ? `
+The user has provided review feedback on your previous changes. Please address this feedback:
+<review_feedback>
+${context.reviewFeedback}
+</review_feedback>
 
+Your previous modifications were to these files: ${context.previousModifications?.map(m => m.path).join(', ') || 'none'}
+` : ''}
 If you need to explore code, use the read_github_file tool.
 Once you understand the codebase and know what to change, provide the final JSON output.
-Your final output MUST be a JSON array of files to modify, structured exactly like this:
+Your final output MUST be a JSON object with two fields:
+1. "summary" - A clear, detailed description of what you changed and why (2-4 paragraphs, markdown formatted)
+2. "modifications" - An array of files to modify
+
+Output format:
 \`\`\`json
-[
-  {
-    "path": "path/to/file.ts",
-    "content": "the complete rewritten raw string content of the file"
-  }
-]
+{
+  "summary": "## Summary\n\nDescribe what was changed and why...",
+  "modifications": [
+    {
+      "path": "path/to/file.ts",
+      "content": "the complete rewritten raw string content of the file"
+    }
+  ]
+}
 \`\`\`
-DO NOT EXPLAIN. JUST OUTPUT THE JSON.`;
+Output ONLY the JSON object. No other text.`;
 
   const readGithubFileDecl = {
     name: 'read_github_file',
@@ -336,14 +366,54 @@ async function emitResult(
 ) {
   sendEvent(controller, "status", { message: "Parsing agent output...", step: "parsing" });
 
-  const jsonMatch = rawResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);
-  if (!jsonMatch) {
-    const preview = rawResponse.slice(0, 300).replace(/\n/g, ' ');
+  // Multi-strategy JSON extraction
+  let parsed: any = null;
+  let summary = "";
+  let modificationsList: any[] = [];
+
+  // Strategy 1: Extract from ```json ... ``` code fences
+  const fenceMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const jsonCandidate = fenceMatch ? fenceMatch[1].trim() : rawResponse.trim();
+
+  // Strategy 2: Try parsing as { summary, modifications } object
+  try {
+    parsed = JSON.parse(jsonCandidate);
+    if (parsed && parsed.modifications && Array.isArray(parsed.modifications)) {
+      summary = parsed.summary || "";
+      modificationsList = parsed.modifications;
+    } else if (Array.isArray(parsed)) {
+      // Legacy format: plain array
+      modificationsList = parsed;
+    }
+  } catch {
+    // Strategy 3: Try regex for object with modifications
+    const objMatch = rawResponse.match(/\{[\s\S]*"modifications"\s*:\s*\[([\s\S]*)\][\s\S]*\}/);
+    if (objMatch) {
+      try {
+        parsed = JSON.parse(objMatch[0]);
+        summary = parsed.summary || "";
+        modificationsList = parsed.modifications || [];
+      } catch { /* continue */ }
+    }
+
+    // Strategy 4: Try regex for plain array
+    if (modificationsList.length === 0) {
+      const arrMatch = rawResponse.match(/\[\s*\{[\s\S]*?"path"[\s\S]*?"content"[\s\S]*?\}\s*\]/);
+      if (arrMatch) {
+        try {
+          modificationsList = JSON.parse(arrMatch[0]);
+        } catch { /* continue */ }
+      }
+    }
+  }
+
+  if (modificationsList.length === 0) {
+    const preview = rawResponse.slice(0, 400).replace(/\n/g, ' ');
+    // Send raw response for session recovery
+    sendEvent(controller, "raw_response", { text: rawResponse });
     sendEvent(controller, "error", { message: `Agent did not return valid JSON modifications. The model said: "${preview}..."` });
     return;
   }
-
-  const modificationsList = JSON.parse(jsonMatch[0]);
 
   sendEvent(controller, "status", { message: `Fetching original files for diff (${modificationsList.length} files)...`, step: "diffing" });
 
@@ -371,6 +441,7 @@ async function emitResult(
 
   sendEvent(controller, "result", {
     modifications,
+    summary,
     usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, estimatedCostUsd, provider: modelId },
   });
 }

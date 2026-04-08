@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Workspace, RepoContext } from "../components/Workspace";
 
 const GithubIcon = ({ className }: { className?: string }) => (
@@ -23,11 +23,45 @@ const LogOutIcon = () => (
   </svg>
 );
 
-const SettingsIcon = () => (
+const ExternalLinkIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="3" /><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
   </svg>
 );
+
+const ClockIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+);
+
+interface PREntry {
+  id: number;
+  number: number;
+  title: string;
+  repo: string;
+  state: string;
+  url: string;
+  createdAt: string;
+}
+
+interface SavedSession {
+  id: string;
+  repo: string;
+  prompt: string;
+  modelId: string;
+  status: string;
+  timestamp: string;
+  usage?: { estimatedCostUsd: number; inputTokens: number; outputTokens: number };
+  modifications?: any[];
+  summary?: string;
+}
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -35,6 +69,32 @@ export default function Home() {
   const [isIngesting, setIsIngesting] = useState(false);
   const [repoContext, setRepoContext] = useState<RepoContext | null>(null);
   const [error, setError] = useState("");
+  const [prHistory, setPrHistory] = useState<PREntry[]>([]);
+  const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
+  const [loadingPRs, setLoadingPRs] = useState(false);
+
+  // Load saved sessions from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('pr-creator-sessions');
+      if (raw) {
+        const sessions = Object.values(JSON.parse(raw)) as SavedSession[];
+        setSavedSessions(sessions.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 10));
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // Fetch PR history when authenticated
+  useEffect(() => {
+    if (session?.accessToken) {
+      setLoadingPRs(true);
+      fetch("/api/github/prs")
+        .then(r => r.json())
+        .then(data => { if (data.prs) setPrHistory(data.prs); })
+        .catch(() => {})
+        .finally(() => setLoadingPRs(false));
+    }
+  }, [session]);
 
   const handleIngest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,6 +118,33 @@ export default function Home() {
     } finally {
       setIsIngesting(false);
     }
+  };
+
+  const clearSessions = () => {
+    localStorage.removeItem('pr-creator-sessions');
+    sessionStorage.removeItem('pr-creator-session-id');
+    setSavedSessions([]);
+  };
+
+  const getStatusBadge = (state: string) => {
+    const styles: Record<string, { bg: string; color: string; label: string }> = {
+      open: { bg: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', label: 'Open' },
+      merged: { bg: 'rgba(139, 92, 246, 0.15)', color: '#a78bfa', label: 'Merged' },
+      closed: { bg: 'rgba(107, 114, 128, 0.15)', color: '#9ca3af', label: 'Closed' },
+    };
+    const s = styles[state] || styles.closed;
+    return <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '999px', background: s.bg, color: s.color, fontWeight: 600 }}>{s.label}</span>;
+  };
+
+  const getSessionStatusBadge = (status: string) => {
+    const styles: Record<string, { bg: string; color: string }> = {
+      complete: { bg: 'rgba(52, 211, 153, 0.15)', color: 'var(--success)' },
+      failed: { bg: 'rgba(239, 68, 68, 0.15)', color: 'var(--error)' },
+      running: { bg: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa' },
+      idle: { bg: 'rgba(107, 114, 128, 0.15)', color: '#9ca3af' },
+    };
+    const s = styles[status] || styles.idle;
+    return <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '999px', background: s.bg, color: s.color, fontWeight: 600, textTransform: 'capitalize' as const }}>{status}</span>;
   };
 
   if (status === "loading") {
@@ -84,6 +171,9 @@ export default function Home() {
         <div className="user-chip glass animate-fade-in">
           {session.user?.image && <img src={session.user.image} alt="Avatar" />}
           <span>{session.user?.name}</span>
+          <a href={`https://github.com/${session.user?.name}`} target="_blank" rel="noreferrer" title="View GitHub Profile" style={{ color: 'var(--muted)', display: 'flex', alignItems: 'center' }}>
+            <ExternalLinkIcon />
+          </a>
           <button onClick={() => signOut()} title="Sign Out">
             <LogOutIcon />
           </button>
@@ -91,7 +181,7 @@ export default function Home() {
       )}
 
       {/* Hero content */}
-      <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: '700px' }}>
         <div className="logo-badge animate-fade-in animate-float">
           <GithubIcon />
         </div>
@@ -110,8 +200,8 @@ export default function Home() {
             Connect GitHub to Start
           </button>
         ) : (
-          <div className="animate-fade-in-delay-2" style={{ width: '100%', maxWidth: '540px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <form onSubmit={handleIngest} style={{ width: '100%' }}>
+          <div className="animate-fade-in-delay-2" style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
+            <form onSubmit={handleIngest} style={{ width: '100%', maxWidth: '540px' }}>
               <div className="input-wrapper">
                 <input
                   type="url"
@@ -126,7 +216,67 @@ export default function Home() {
                   {isIngesting ? <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2 }} /> : <ArrowIcon />}
                 </button>
               </div>
+              {error && <div className="error-text" style={{ marginTop: '0.75rem' }}>{error}</div>}
             </form>
+
+            {/* Session History */}
+            {savedSessions.length > 0 && (
+              <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <ClockIcon /> Recent Sessions
+                  </h3>
+                  <button onClick={clearSessions} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
+                    <TrashIcon /> Clear
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {savedSessions.slice(0, 5).map((s) => (
+                    <div key={s.id} className="session-card">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{s.repo}</span>
+                        {getSessionStatusBadge(s.status)}
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '2px' }}>
+                        {s.prompt?.slice(0, 80)}{s.prompt?.length > 80 ? '...' : ''}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--muted)', marginTop: '4px' }}>
+                        <span>{s.modelId}</span>
+                        <span>{s.usage ? `$${s.usage.estimatedCostUsd.toFixed(4)}` : ''} • {new Date(s.timestamp).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* PR History */}
+            {loadingPRs ? (
+              <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem', textAlign: 'center' }}>
+                <div className="spinner" style={{ width: 20, height: 20, borderWidth: 2, margin: '0 auto' }} />
+                <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.5rem' }}>Loading PR history...</p>
+              </div>
+            ) : prHistory.length > 0 && (
+              <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.25rem' }}>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <GithubIcon className="" /> Your PRs
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {prHistory.map((pr) => (
+                    <a key={pr.id} href={pr.url} target="_blank" rel="noreferrer" className="pr-history-card">
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{pr.title}</span>
+                        {getStatusBadge(pr.state)}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--muted)', marginTop: '2px' }}>
+                        <span>{pr.repo} #{pr.number}</span>
+                        <span>{new Date(pr.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
