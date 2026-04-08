@@ -324,7 +324,12 @@ export function Workspace({ repoContext, onReset, activePR }: { repoContext: Rep
         if (!res.ok) throw new Error(data.error || "Failed to update PR");
         setPrUrl(activePR!.url);
         setPrBranch(prDetails.branch);
-        addLog("status", `✓ Pushed commit to branch: ${prDetails.branch}`);
+        if (data.failed?.length > 0) {
+          addLog("tool_done", `✓ Pushed ${data.pushed?.length} file(s) to ${prDetails.branch}`);
+          addLog("tool_error", `⚠ Failed to push ${data.failed.length} file(s): ${data.failed.map((f: any) => f.path).join(', ')}. For .github/workflows/ files, revoke the app at github.com/settings/applications and re-sign-in.`);
+        } else {
+          addLog("status", `✓ Pushed ${data.pushed?.length || 'all'} file(s) to branch: ${prDetails.branch}`);
+        }
       } else {
         const prTitle = prompt.split('\n')[0].slice(0, 72);
         const filesChanged = modifications.map(m => `- \`${m.path}\``).join('\n');
