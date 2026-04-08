@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import * as Diff from "diff";
 import * as Diff2Html from "diff2html";
 import "diff2html/bundles/css/diff2html.min.css";
@@ -28,6 +28,13 @@ export interface AgentUsage {
   provider: string;
 }
 
+interface LogEntry {
+  id: number;
+  type: "status" | "tool" | "tool_done" | "tool_error" | "usage" | "error";
+  message: string;
+  timestamp: Date;
+}
+
 /* ── Inline SVG Icons ── */
 const PlayIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="6 3 20 12 6 21 6 3" /></svg>
@@ -53,17 +60,34 @@ const ActivityIcon = () => (
 const CpuIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2" /></svg>
 );
+const FileIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" /><polyline points="14 2 14 8 20 8" /></svg>
+);
+const TerminalIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
+);
 
 export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; onReset: () => void }) {
   const [modelId, setModelId] = useState("claude-opus-4-6");
   const [prompt, setPrompt] = useState("");
   const [isAgentRunning, setIsAgentRunning] = useState(false);
-  const [agentStep, setAgentStep] = useState("");
   const [modifications, setModifications] = useState<{ path: string; originalContent: string; content: string }[] | null>(null);
   const [usage, setUsage] = useState<AgentUsage | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [prUrl, setPrUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const logEndRef = useRef<HTMLDivElement>(null);
+  let logCounter = useRef(0);
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
+
+  const addLog = (type: LogEntry["type"], message: string) => {
+    logCounter.current++;
+    setLogs(prev => [...prev, { id: logCounter.current, type, message, timestamp: new Date() }]);
+  };
 
   const handleRunAgent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +96,9 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
     setModifications(null);
     setUsage(null);
     setError("");
-    setAgentStep("Analyzing codebase & drafting changes...");
+    setLogs([]);
+
+    addLog("status", `Starting agent with ${modelId}...`);
 
     try {
       const res = await fetch("/api/agent", {
@@ -88,16 +114,79 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Agent failed");
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Agent failed");
+      }
 
-      setModifications(data.modifications);
-      setUsage(data.usage);
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      if (!reader) throw new Error("No readable stream");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE events from buffer
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || ""; // keep incomplete line in buffer
+
+        let currentEvent = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ") && currentEvent) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              handleSSEEvent(currentEvent, data);
+            } catch { /* ignore parse errors */ }
+            currentEvent = "";
+          }
+        }
+      }
     } catch (err: any) {
       setError(err.message);
+      addLog("error", err.message);
     } finally {
       setIsAgentRunning(false);
-      setAgentStep("");
+    }
+  };
+
+  const handleSSEEvent = (event: string, data: any) => {
+    switch (event) {
+      case "status":
+        addLog("status", data.message);
+        break;
+      case "tool":
+        addLog("tool", `Reading file: ${data.path}`);
+        break;
+      case "tool_done":
+        addLog("tool_done", `✓ Read ${data.path} (${(data.size / 1024).toFixed(1)} KB)`);
+        break;
+      case "tool_error":
+        addLog("tool_error", `✗ Failed to read ${data.path}: ${data.error}`);
+        break;
+      case "usage":
+        setUsage({
+          inputTokens: data.inputTokens,
+          outputTokens: data.outputTokens,
+          estimatedCostUsd: 0,
+          provider: data.provider,
+        });
+        break;
+      case "result":
+        setModifications(data.modifications);
+        setUsage(data.usage);
+        addLog("status", `✓ Done! ${data.modifications.length} file(s) modified.`);
+        break;
+      case "error":
+        setError(data.message);
+        addLog("error", data.message);
+        break;
     }
   };
 
@@ -146,6 +235,26 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
     return <div dangerouslySetInnerHTML={{ __html: html }} className="diff-wrapper" />;
   };
 
+  const getLogIcon = (type: LogEntry["type"]) => {
+    switch (type) {
+      case "tool": return <FileIcon />;
+      case "tool_done": return <span style={{ color: 'var(--success)' }}>✓</span>;
+      case "tool_error":
+      case "error": return <span style={{ color: 'var(--error)' }}>✗</span>;
+      default: return <span style={{ color: 'var(--primary)' }}>›</span>;
+    }
+  };
+
+  const getLogColor = (type: LogEntry["type"]) => {
+    switch (type) {
+      case "tool_done": return "var(--success)";
+      case "tool_error":
+      case "error": return "var(--error)";
+      case "tool": return "var(--accent)";
+      default: return "var(--muted)";
+    }
+  };
+
   return (
     <div className="page-workspace animate-fade-in">
       {/* ── Sidebar ── */}
@@ -171,7 +280,7 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
         </div>
 
         {/* Issues */}
-        <div className="glass-panel" style={{ padding: '1.25rem', flex: 1, maxHeight: '500px', overflowY: 'auto' }}>
+        <div className="glass-panel" style={{ padding: '1.25rem', flex: 1, maxHeight: '400px', overflowY: 'auto' }}>
           <h3 className="section-title">
             <AlertIcon />
             Open Issues ({repoContext.issues.length})
@@ -199,7 +308,7 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
           <div className="glass-panel usage-widget animate-fade-in">
             <h3 className="section-title">
               <ActivityIcon />
-              Run Metrics
+              Usage
               <span className="usage-provider-tag">{usage.provider}</span>
             </h3>
             <div className="usage-row"><span className="label">Input Tokens</span><span>{usage.inputTokens.toLocaleString()}</span></div>
@@ -240,7 +349,7 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
                 {isAgentRunning ? (
                   <>
                     <div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }} />
-                    {agentStep}
+                    Running...
                   </>
                 ) : (
                   <>
@@ -254,6 +363,45 @@ export function Workspace({ repoContext, onReset }: { repoContext: RepoContext; 
             {error && <div className="error-text">{error}</div>}
           </form>
         </div>
+
+        {/* Live Activity Log */}
+        {(isAgentRunning || logs.length > 0) && !modifications && (
+          <div className="glass-panel animate-fade-in" style={{ padding: '1.25rem' }}>
+            <h3 className="section-title" style={{ marginBottom: '0.75rem' }}>
+              <TerminalIcon />
+              Agent Activity
+              {isAgentRunning && <span className="usage-provider-tag" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--success)' }}>LIVE</span>}
+            </h3>
+            <div style={{
+              background: 'rgba(0,0,0,0.5)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--surface-border)',
+              padding: '0.75rem',
+              maxHeight: '300px',
+              overflowY: 'auto',
+              fontFamily: "'SF Mono', 'Menlo', monospace",
+              fontSize: '0.8rem',
+              lineHeight: '1.8',
+            }}>
+              {logs.map((log) => (
+                <div key={log.id} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', color: getLogColor(log.type) }}>
+                  <span style={{ flexShrink: 0, width: '16px', textAlign: 'center' }}>{getLogIcon(log.type)}</span>
+                  <span style={{ color: 'var(--muted)', flexShrink: 0, fontSize: '0.7rem', marginTop: '2px' }}>
+                    {log.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                  <span>{log.message}</span>
+                </div>
+              ))}
+              {isAgentRunning && (
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', color: 'var(--primary)' }}>
+                  <div className="spinner" style={{ width: 12, height: 12, borderWidth: 1.5 }} />
+                  <span style={{ opacity: 0.6 }}>Waiting for agent...</span>
+                </div>
+              )}
+              <div ref={logEndRef} />
+            </div>
+          </div>
+        )}
 
         {/* PR Success */}
         {prUrl && (
