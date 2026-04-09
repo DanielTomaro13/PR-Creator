@@ -3,6 +3,7 @@
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useState, useEffect } from "react";
 import { Workspace, RepoContext } from "../components/Workspace";
+import { ReviewWorkspace } from "../components/ReviewWorkspace";
 
 const GithubIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -77,6 +78,7 @@ export default function Home() {
   const [loadingPR, setLoadingPR] = useState<string | null>(null);
   const [providerStatus, setProviderStatus] = useState<any[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(false);
+  const [reviewPR, setReviewPR] = useState<{ url: string; owner: string; repo: string; number: number; title: string } | null>(null);
 
   // Load saved sessions from localStorage
   useEffect(() => {
@@ -118,6 +120,15 @@ export default function Home() {
     if (!repoUrl) return;
     setIsIngesting(true);
     setError("");
+
+    // Detect PR URL: https://github.com/owner/repo/pull/123
+    const prMatch = repoUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+    if (prMatch) {
+      const [, prOwner, prRepo, prNum] = prMatch;
+      setReviewPR({ url: repoUrl, owner: prOwner, repo: prRepo, number: parseInt(prNum), title: `PR #${prNum}` });
+      setIsIngesting(false);
+      return;
+    }
 
     try {
       const res = await fetch("/api/github/scan", {
@@ -198,6 +209,10 @@ export default function Home() {
     );
   }
 
+  if (reviewPR) {
+    return <ReviewWorkspace reviewPR={reviewPR} onReset={() => setReviewPR(null)} />;
+  }
+
   if (repoContext) {
     return <Workspace repoContext={repoContext} onReset={() => { setRepoContext(null); setActivePR(null); }} activePR={activePR} />;
   }
@@ -250,7 +265,7 @@ export default function Home() {
                   type="url"
                   value={repoUrl}
                   onChange={(e) => setRepoUrl(e.target.value)}
-                  placeholder="https://github.com/username/repository"
+                  placeholder="https://github.com/owner/repo or .../pull/123"
                   className="input-base"
                   style={{ fontSize: '1.05rem', padding: '1rem 4rem 1rem 1.25rem' }}
                   required

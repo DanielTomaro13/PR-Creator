@@ -13,6 +13,7 @@ type ContextParam = {
   files: string[];
   prompt: string;
   modelId: string;
+  mode?: "build" | "review";
   reviewFeedback?: string;
   previousModifications?: { path: string; content: string }[];
 }
@@ -98,7 +99,9 @@ async function runAnthropicAgent(context: ContextParam, octokit: Octokit, contro
     },
   };
 
-  const systemPrompt = `You are PR-Creator, an autonomous senior software engineer.
+  const isReviewMode = context.mode === "review";
+
+  const buildSystemPrompt = `You are an autonomous senior software engineer.
 You are working on the repository: ${owner}/${repo} (Branch: ${defaultBranch}).
 Here are the files in this repository:
 ${files.join('\n')}
@@ -134,6 +137,41 @@ Output format:
 }
 \`\`\`
 Output ONLY the JSON object. No other text.`;
+
+  const reviewSystemPrompt = `You are a senior code reviewer analyzing a Pull Request on ${owner}/${repo}.
+You have access to the repository files for context. Use read_github_file to understand the codebase.
+
+Here are the files in this repository:
+${files.join('\n')}
+
+The user will provide the PR diff and metadata. Your job is to:
+1. Understand the intent of the changes
+2. Identify bugs, security issues, performance problems, and style issues
+3. Provide actionable, specific feedback with line references
+4. Be constructive — acknowledge good patterns too
+
+Your final output MUST be a JSON object with:
+1. "summary" - Overall assessment (2-3 paragraphs, markdown)
+2. "comments" - Array of inline review comments
+
+For each comment, use the EXACT filename and line number from the diff. Use GitHub suggestion syntax when proposing code changes.
+
+Output format:
+\`\`\`json
+{
+  "summary": "## Code Review\n\nOverall assessment...",
+  "comments": [
+    {
+      "path": "src/file.ts",
+      "line": 42,
+      "body": "Issue description. \n\n\`\`\`suggestion\nsuggested fix code\n\`\`\`"
+    }
+  ]
+}
+\`\`\`
+Output ONLY the JSON object. No other text.`;
+
+  const systemPrompt = isReviewMode ? reviewSystemPrompt : buildSystemPrompt;
 
   let messages: any[] = [
     { role: "user", content: "Please begin. Read whichever files you need, then provide the JSON of modifications." }
@@ -235,7 +273,9 @@ async function runGeminiAgent(context: ContextParam, octokit: Octokit, controlle
   const ai = new GoogleGenAI({ apiKey: geminiApiKey });
   const { owner, repo, defaultBranch, files, prompt, modelId } = context;
 
-  const systemPrompt = `You are PR-Creator, an autonomous senior software engineer.
+  const isReviewMode = context.mode === "review";
+
+  const buildSystemPrompt = `You are an autonomous senior software engineer.
 You are working on the repository: ${owner}/${repo} (Branch: ${defaultBranch}).
 Here are the files in this repository:
 ${files.join('\n')}
@@ -271,6 +311,41 @@ Output format:
 }
 \`\`\`
 Output ONLY the JSON object. No other text.`;
+
+  const reviewSystemPrompt = `You are a senior code reviewer analyzing a Pull Request on ${owner}/${repo}.
+You have access to the repository files for context. Use read_github_file to understand the codebase.
+
+Here are the files in this repository:
+${files.join('\n')}
+
+The user will provide the PR diff and metadata. Your job is to:
+1. Understand the intent of the changes
+2. Identify bugs, security issues, performance problems, and style issues
+3. Provide actionable, specific feedback with line references
+4. Be constructive — acknowledge good patterns too
+
+Your final output MUST be a JSON object with:
+1. "summary" - Overall assessment (2-3 paragraphs, markdown)
+2. "comments" - Array of inline review comments
+
+For each comment, use the EXACT filename and line number from the diff. Use GitHub suggestion syntax when proposing code changes.
+
+Output format:
+\`\`\`json
+{
+  "summary": "## Code Review\n\nOverall assessment...",
+  "comments": [
+    {
+      "path": "src/file.ts",
+      "line": 42,
+      "body": "Issue description."
+    }
+  ]
+}
+\`\`\`
+Output ONLY the JSON object. No other text.`;
+
+  const systemPrompt = isReviewMode ? reviewSystemPrompt : buildSystemPrompt;
 
   const readGithubFileDecl = {
     name: 'read_github_file',
@@ -375,14 +450,24 @@ async function emitResult(
   const fenceMatch = rawResponse.match(/```(?:json)?\s*([\s\S]*?)```/);
   const jsonCandidate = fenceMatch ? fenceMatch[1].trim() : rawResponse.trim();
 
-  // Strategy 2: Try parsing as { summary, modifications } object
+  // Strategy 2: Try parsing as { summary, modifications } or { summary, comments } object
   try {
     parsed = JSON.parse(jsonCandidate);
-    if (parsed && parsed.modifications && Array.isArray(parsed.modifications)) {
+    if (parsed && parsed.comments && Array.isArray(parsed.comments)) {
+      // Review mode output — emit early and return
+      summary = parsed.summary || "";
+      let estimatedCostUsd = 0;
+      if (modelId.includes('opus')) estimatedCostUsd = (totalInputTokens / 1_000_000) * 15.00 + (totalOutputTokens / 1_000_000) * 75.00;
+      else if (!modelId.includes('gemini')) estimatedCostUsd = (totalInputTokens / 1_000_000) * 3.00 + (totalOutputTokens / 1_000_000) * 15.00;
+      sendEvent(controller, "result", {
+        summary, comments: parsed.comments,
+        usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, estimatedCostUsd, provider: modelId },
+      });
+      return;
+    } else if (parsed && parsed.modifications && Array.isArray(parsed.modifications)) {
       summary = parsed.summary || "";
       modificationsList = parsed.modifications;
     } else if (Array.isArray(parsed)) {
-      // Legacy format: plain array
       modificationsList = parsed;
     }
   } catch {

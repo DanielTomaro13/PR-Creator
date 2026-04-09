@@ -657,3 +657,48 @@ html, body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--surface-border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ── DIFF VIEWER ── */
+.diff-viewer {
+  font-size: 0.78rem;
+  line-height: 1.5;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+.diff-viewer .d2h-wrapper { background: transparent; }
+.diff-viewer .d2h-file-header { display: none; }
+.diff-viewer .d2h-code-linenumber {
+  background: rgba(255,255,255,0.02);
+  color: var(--muted);
+  border-right: 1px solid var(--surface-border);
+  padding: 0 0.5rem;
+  min-width: 2.5rem;
+  text-align: right;
+}
+.diff-viewer .d2h-code-line {
+  padding-left: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.diff-viewer .d2h-code-line-ctn { white-space: pre-wrap; }
+.diff-viewer .d2h-ins {
+  background: rgba(52, 211, 153, 0.08);
+  border-color: rgba(52, 211, 153, 0.2);
+}
+.diff-viewer .d2h-ins .d2h-code-line-ctn { color: var(--success); }
+.diff-viewer .d2h-del {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.2);
+}
+.diff-viewer .d2h-del .d2h-code-line-ctn { color: var(--error); }
+.diff-viewer .d2h-info {
+  background: rgba(99, 102, 241, 0.06);
+  color: var(--muted);
+}
+.diff-viewer .d2h-code-side-line { background: transparent; }
+.diff-viewer .d2h-file-diff { border: none; }
+.diff-viewer table.d2h-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: inherit;
+}
+.diff-viewer td { border: none; vertical-align: top; }
